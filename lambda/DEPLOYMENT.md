@@ -31,9 +31,9 @@ This guide explains how to deploy the Gemini API Lambda function to AWS and conf
 
 ### 3. Upload the Function Code
 
-1. Zip the `geminiHandler.js` file:
+1. Zip the `geminiHandler.mjs` file:
    ```
-   zip gemini-function.zip geminiHandler.js
+   zip gemini-function.zip geminiHandler.mjs
    ```
 
 2. Upload the zip file to Lambda:
@@ -46,8 +46,10 @@ This guide explains how to deploy the Gemini API Lambda function to AWS and conf
 ### 4. Configure Function Settings
 
 1. Set the handler to `geminiHandler.handler`
-2. Increase the timeout to at least 10 seconds
-3. Increase the memory to at least 256 MB
+2. Set the runtime to Node.js 18.x or later
+3. Make sure the "ES module" setting is enabled (this is important for .mjs files)
+4. Increase the timeout to at least 10 seconds
+5. Increase the memory to at least 256 MB
 
 ### 5. Create an API Gateway
 
@@ -101,6 +103,18 @@ If the Lambda function fails to execute:
 1. Check the CloudWatch Logs for error messages
 2. Verify that the `GEMINI_API_KEY` environment variable is set correctly
 3. Make sure the Lambda function has internet access (it should be in a VPC with internet access or not in a VPC at all)
+
+#### ES Module Issues
+
+If you see an error like `require is not defined in ES module scope`:
+
+1. Make sure your Lambda function file has the `.mjs` extension (not `.js`)
+2. Verify that you're using ES module syntax (`import` instead of `require`)
+3. In the Lambda console, ensure that:
+   - The handler is correctly set to `geminiHandler.handler`
+   - The runtime is Node.js 18.x or later
+   - The "ES module" setting is enabled in the Runtime settings
+4. If you're still having issues, try renaming the file to `index.mjs` and setting the handler to `index.handler`
 
 ### API Gateway Issues
 
