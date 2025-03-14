@@ -1,3 +1,7 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -5,9 +9,35 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Chess piece animation */
+@keyframes piece-highlight {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(25, 118, 210, 0);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(25, 118, 210, 0.7);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(25, 118, 210, 0);
+  }
+}
+
+.highlight-piece {
+  animation: piece-highlight 1s ease-in-out;
 }
