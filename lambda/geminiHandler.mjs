@@ -1,5 +1,4 @@
 import https from 'https';
-import { Chess } from 'chess.js';
 
 // Gemini API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -132,51 +131,45 @@ const getCorsHeaders = (origin) => {
   };
 };
 /**
- * Validate a chess move
- * @param {string} fen - The FEN string representing the current position
+ * Basic validation for a chess move format
  * @param {string} moveText - The move text in the format "e2e4" or "e7e8q"
- * @returns {boolean|Object} - False if the move is invalid, or the move object if valid
+ * @returns {boolean} - True if the move format is valid, false otherwise
  */
-const validateMove = (fen, moveText) => {
+const validateMoveFormat = (moveText) => {
   try {
-    // Create a chess instance with the current position
-    const chess = new Chess(fen);
-    
-    // Check if the king is in check
-    const isCheck = chess.isCheck();
-    
-    // Parse the move text
-    if (moveText.length < 4) {
-      console.log(`Invalid move format: ${moveText}`);
+    // Check if the move text has the correct length
+    if (moveText.length < 4 || moveText.length > 5) {
+      console.log(`Invalid move format length: ${moveText}`);
       return false;
     }
     
+    // Parse the move text
     const from = moveText.substring(0, 2);
     const to = moveText.substring(2, 4);
     const promotion = moveText.length > 4 ? moveText.substring(4, 5) : undefined;
     
-    // Try to make the move
-    const move = chess.move({ from, to, promotion });
+    // Check if the from and to squares are valid chess squares
+    const isValidSquare = (square) => {
+      return square.length === 2 &&
+             'abcdefgh'.includes(square[0]) &&
+             '12345678'.includes(square[1]);
+    };
     
-    if (!move) {
-      console.log(`Invalid move: ${moveText}`);
+    if (!isValidSquare(from) || !isValidSquare(to)) {
+      console.log(`Invalid square in move: ${moveText}`);
       return false;
     }
     
-    // If the king was in check, verify that the move addresses the check
-    if (isCheck) {
-      // After making the move, the king should no longer be in check
-      // Since we've already made the move, we just need to verify that the game is still ongoing
-      if (chess.isCheckmate() || chess.isDraw()) {
-        console.log(`Move doesn't address check properly: ${moveText}`);
-        return false;
-      }
+    // Check if the promotion piece is valid (if present)
+    if (promotion && !'qrbnQRBN'.includes(promotion)) {
+      console.log(`Invalid promotion piece: ${promotion}`);
+      return false;
     }
     
-    console.log(`Valid move: ${moveText}`);
-    return move;
+    console.log(`Move format is valid: ${moveText}`);
+    return true;
   } catch (error) {
-    console.error(`Error validating move: ${error.message}`);
+    console.error(`Error validating move format: ${error.message}`);
     return false;
   }
 };
@@ -244,25 +237,23 @@ export const handler = async (event, context) => {
       // Call the Gemini API
       const response = await callGeminiAPI(prompt, temperature);
       
-      // For move requests, validate the move before returning
-      if (requestType === 'move' && fen) {
+      // For move requests, validate the move format before returning
+      if (requestType === 'move') {
         const moveText = response.trim();
-        console.log(`Validating move: ${moveText} for position: ${fen}`);
+        console.log(`Validating move format: ${moveText}`);
         
-        const validMove = validateMove(fen, moveText);
+        const isValidFormat = validateMoveFormat(moveText);
         
-        if (!validMove) {
-          console.log(`Invalid move returned by Gemini: ${moveText}`);
+        if (!isValidFormat) {
+          console.log(`Invalid move format returned by Gemini: ${moveText}`);
           
           // Try to get a valid move by retrying with a more explicit prompt
           const retryPrompt = `
 ${prompt}
 
-CRITICAL: Your previous move "${moveText}" was invalid. Please analyze the position again and provide a LEGAL move.
-Remember that if the king is in check, you MUST address the check by:
-1. Moving the king to a safe square
-2. Capturing the checking piece
-3. Blocking the check with another piece
+CRITICAL: Your previous move "${moveText}" was invalid. Please provide a move in the correct format.
+The format should be exactly like "e2e4" (from square to square).
+For pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
 
 Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
 `;
@@ -271,23 +262,23 @@ Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
           const retryResponse = await callGeminiAPI(retryPrompt, temperature);
           const retryMoveText = retryResponse.trim();
           
-          const retryValidMove = validateMove(fen, retryMoveText);
+          const retryIsValidFormat = validateMoveFormat(retryMoveText);
           
-          if (!retryValidMove) {
-            console.log(`Retry also produced invalid move: ${retryMoveText}`);
+          if (!retryIsValidFormat) {
+            console.log(`Retry also produced invalid move format: ${retryMoveText}`);
             
-            // Return an error indicating the move was invalid
+            // Return an error indicating the move format was invalid
             return {
               statusCode: 400,
               headers: corsHeaders,
               body: JSON.stringify({
-                error: `Invalid move: ${moveText}. Retry also invalid: ${retryMoveText}`,
+                error: `Invalid move format: ${moveText}. Retry also invalid: ${retryMoveText}`,
                 success: false
               })
             };
           }
           
-          console.log(`Retry produced valid move: ${retryMoveText}`);
+          console.log(`Retry produced valid move format: ${retryMoveText}`);
           
           // Return the valid move from the retry
           return {
@@ -300,7 +291,7 @@ Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
           };
         }
         
-        console.log(`Move validated successfully: ${moveText}`);
+        console.log(`Move format validated successfully: ${moveText}`);
       }
       
       // Return the response

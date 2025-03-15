@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Chess } from 'chess.js';
+import { Chess, Square } from 'chess.js';
 
 // Define types for our state
 export interface GameState {
@@ -46,8 +46,21 @@ export const gameSlice = createSlice({
       const chess = new Chess(state.fen);
       
       try {
+        // Check if this is a pawn promotion move
+        const piece = chess.get(from as Square);
+        const isPawnPromotion =
+          piece &&
+          piece.type === 'p' &&
+          ((piece.color === 'w' && to[1] === '8') ||
+           (piece.color === 'b' && to[1] === '1'));
+        
+        console.log(`makeMove - Is pawn promotion: ${isPawnPromotion}`);
+        
+        // If it's a promotion move, ensure we have a promotion piece
+        const movePromotion = isPawnPromotion ? (promotion || 'q') : promotion;
+        
         // Attempt to make the move
-        const move = chess.move({ from, to, promotion });
+        const move = chess.move({ from, to, promotion: movePromotion });
         
         if (move) {
           console.log('makeMove - Move made:', move);

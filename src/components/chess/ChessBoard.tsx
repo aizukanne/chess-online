@@ -31,6 +31,36 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     console.log('ChessBoard - History after load:', chess.history());
   }, [fen, chess]);
 
+  // Handle promotion piece selection
+  const handlePromotionPieceSelect = (
+    piece: string | undefined,
+    sourceSquare: Square | undefined,
+    targetSquare: Square | undefined
+  ) => {
+    // If any parameter is undefined, return false
+    if (!piece || !sourceSquare || !targetSquare) {
+      console.error('ChessBoard - Promotion piece selection missing parameters');
+      return false;
+    }
+    
+    console.log(`ChessBoard - Promotion piece selected: ${piece}, from ${sourceSquare} to ${targetSquare}`);
+    
+    // Extract the promotion piece type (q, r, n, b) from the piece string (e.g., "wQ" -> "q")
+    const promotionPiece = piece.charAt(1).toLowerCase();
+    
+    // Create the move object with the selected promotion piece
+    const moveObj = {
+      from: sourceSquare,
+      to: targetSquare,
+      promotion: promotionPiece
+    };
+    
+    console.log('ChessBoard - Dispatching promotion move:', moveObj);
+    dispatch(makeMove(moveObj));
+    
+    return true;
+  };
+  
   // Handle piece movement
   const onDrop = (sourceSquare: Square, targetSquare: Square, piece: string): boolean => {
     console.log(`ChessBoard - onDrop: from ${sourceSquare} to ${targetSquare}, piece: ${piece}`);
@@ -42,9 +72,6 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     }
     
     try {
-      // Create a temporary chess instance to validate the move
-      const tempChess = new Chess(fen);
-      
       // Check if this is a pawn promotion move
       const isPawnPromotion =
         piece[1].toLowerCase() === 'p' &&
@@ -53,57 +80,23 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
       
       console.log(`ChessBoard - Is pawn promotion: ${isPawnPromotion}`);
       
-      // For pawn promotion, we need to validate the move first
-      if (isPawnPromotion) {
-        // Try the move with queen promotion (default)
-        try {
-          const result = tempChess.move({
-            from: sourceSquare,
-            to: targetSquare,
-            promotion: 'q' // Default to queen for validation
-          });
-          
-          if (!result) {
-            console.error('ChessBoard - Invalid promotion move');
-            return false;
-          }
-          
-          console.log('ChessBoard - Promotion move is valid, promoting to queen');
-        } catch (validationError) {
-          console.error('ChessBoard - Promotion move validation error:', validationError);
-          return false;
-        }
-      } else {
-        // For non-promotion moves, validate the move
-        try {
-          const result = tempChess.move({
-            from: sourceSquare,
-            to: targetSquare
-          });
-          
-          if (!result) {
-            console.error('ChessBoard - Invalid move');
-            return false;
-          }
-        } catch (validationError) {
-          console.error('ChessBoard - Move validation error:', validationError);
-          return false;
-        }
+      // For non-promotion moves, dispatch immediately
+      if (!isPawnPromotion) {
+        const moveObj = {
+          from: sourceSquare,
+          to: targetSquare,
+          promotion: undefined
+        };
+        
+        console.log('ChessBoard - Dispatching non-promotion move:', moveObj);
+        dispatch(makeMove(moveObj));
+        return true;
       }
       
-      // Create the move object
-      const moveObj = {
-        from: sourceSquare,
-        to: targetSquare,
-        // For promotion, we'll default to queen if it's a pawn promotion move
-        promotion: isPawnPromotion ? 'q' : undefined
-      };
-      
-      console.log('ChessBoard - Dispatching move:', moveObj);
-      
-      // Dispatch the move action
-      dispatch(makeMove(moveObj));
-      
+      // For promotion moves, the react-chessboard library will show a promotion dialog
+      // The selected piece will be passed to onPieceDrop in a subsequent call
+      // We don't need to do anything special here, just return true to allow the promotion dialog
+      console.log('ChessBoard - Allowing promotion dialog to show');
       return true;
     } catch (error) {
       console.error('Move error:', error);
@@ -168,6 +161,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         areArrowsAllowed={true}
         showBoardNotation={showNotation}
         boardWidth={width}
+        // Allow user to select promotion piece
+        onPromotionPieceSelect={handlePromotionPieceSelect}
       />
       
       <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
