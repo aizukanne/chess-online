@@ -63,7 +63,8 @@ const AIChat: React.FC = () => {
         const aiResponse = await generateAIChatResponse(
           fen,
           message.trim(),
-          aiDifficulty || 'intermediate'
+          aiDifficulty || 'intermediate',
+          chatHistory // Pass the chat history
         );
         
         console.log('AIChat: Received AI response:', aiResponse);
@@ -107,12 +108,15 @@ const AIChat: React.FC = () => {
         Ask Kasparov
       </Typography>
       
-      <Box sx={{ 
+      <Box sx={{
         flexGrow: 1,
         overflow: 'auto',
+        overflowY: 'scroll !important', // Always show vertical scrollbar
         p: 2,
+        minHeight: '200px', // Ensure minimum height for content
         '&::-webkit-scrollbar': {
-          width: '8px',
+          width: '10px',
+          display: 'block !important'
         },
         '&::-webkit-scrollbar-track': {
           background: '#f1f1f1',
@@ -124,6 +128,9 @@ const AIChat: React.FC = () => {
         '&::-webkit-scrollbar-thumb:hover': {
           background: '#555',
         },
+        // Firefox scrollbar
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#888 #f1f1f1',
       }}>
         {chatHistory.length === 0 ? (
           <Typography sx={{ color: 'text.secondary', textAlign: 'center', mt: 2 }}>

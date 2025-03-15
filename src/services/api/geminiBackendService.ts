@@ -30,6 +30,7 @@ interface GeminiRequest {
   requestType: 'move' | 'analysis' | 'chat';
   fen: string;
   message?: string;
+  chatHistory?: Array<{ sender: string; message: string; timestamp: number }>;
 }
 
 /**
@@ -120,7 +121,7 @@ export const getBestMove = async (
   const turn = chess.turn();
   
   const prompt = `
-You are a chess engine assistant. Analyze the following chess position in FEN notation and suggest the best move.
+You are Garry Kasparov, a world-class chess grandmaster with particular expertise in the Sicilian Defense Najdorf Variation. Analyze the following chess position in FEN notation and suggest the best move.
 
 FEN: ${fen}
 
@@ -129,13 +130,21 @@ Current turn: ${turn === 'w' ? 'White' : 'Black'}
 Check status: ${isCheck ? 'The king is IN CHECK' : 'The king is not in check'}
 Checkmate status: ${isCheckmate ? 'CHECKMATE' : 'Not checkmate'}
 
+As a grandmaster, you have:
+- Deep understanding of complex interplay between tactical opportunities and long-term strategic considerations
+- Expertise in pattern recognition and positional evaluation
+- Knowledge of recent theoretical developments from 2020-2024 top-level tournament play
+- Ability to analyze psychological aspects of choosing specific variations
+
 Rules:
 1. Provide only a single move in the format "e2e4" (from square to square).
 2. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
 3. The move must be legal according to chess rules.
 4. ${isCheck ? 'IMPORTANT: The king is in check! You MUST address the check with your move.' : ''}
-5. For beginner difficulty, you can make suboptimal but reasonable moves.
-6. For master difficulty, provide the strongest move you can find.
+5. For beginner difficulty, make instructive moves that teach good principles rather than completely random moves.
+6. For intermediate difficulty, play solid positional chess with occasional tactical opportunities.
+7. For advanced difficulty, play strong tactical and strategic moves considering long-term plans.
+8. For master difficulty, provide the strongest tournament-level move you can find, as if playing in a world championship match.
 
 Respond with ONLY the move in the format described, nothing else.
 
@@ -197,18 +206,32 @@ export const getPositionAnalysis = async (
 
   // Create a prompt for the Gemini API
   const prompt = `
-You are a chess coach analyzing a position. Provide analysis for the following chess position in FEN notation.
+You are Garry Kasparov, a world-class chess grandmaster with particular expertise in the Sicilian Defense Najdorf Variation. Provide a comprehensive analysis of the following chess position in FEN notation.
 
 FEN: ${fen}
 
 Difficulty level: ${difficulty}
 
+As a grandmaster, you have:
+- Deep understanding of complex interplay between tactical opportunities and long-term strategic considerations
+- Expertise in pattern recognition and positional evaluation
+- Knowledge of recent theoretical developments from 2020-2024 top-level tournament play
+- Ability to analyze psychological aspects of choosing specific variations
+
 Rules:
 1. Analyze the position based on the difficulty level.
-2. For beginner difficulty, use simple language and focus on basic concepts.
-3. For master difficulty, provide deeper analysis with concrete variations.
-4. Mention material balance, piece activity, and potential tactics.
-5. Keep your analysis concise (2-3 sentences).
+2. For beginner difficulty, use simple language and focus on basic concepts (2-3 sentences).
+3. For intermediate difficulty, provide a balanced analysis of material, position, and basic tactics (3-5 sentences).
+4. For advanced difficulty, include concrete variations and deeper strategic themes (5-7 sentences).
+5. For master difficulty, provide tournament-level analysis with precise variations, including:
+   - Detailed evaluation of the position with numerical assessments
+   - Key tactical motifs and pattern recognition
+   - Strategic themes and middlegame plans
+   - Critical pawn structures and their implications
+   - Typical piece placement and coordination
+   - Potential endgame scenarios
+6. Use proper chess notation and provide evaluations using both traditional symbols (±, =, ∓) and numerical assessments where appropriate.
+7. Explain the reasoning behind critical moves rather than just listing them.
 
 Respond with ONLY the analysis, nothing else.
 `;
@@ -245,7 +268,8 @@ Respond with ONLY the analysis, nothing else.
 export const getChatResponse = async (
   fen: string,
   message: string,
-  difficulty: AIDifficulty
+  difficulty: AIDifficulty,
+  chatHistory: Array<{ sender: string; message: string; timestamp: number }> = []
 ): Promise<string> => {
   // Adjust temperature based on difficulty and message content
   let temperature = 0.7;
@@ -256,23 +280,51 @@ export const getChatResponse = async (
     temperature = 0.9; // More creative for jokes
   }
 
+  // Format chat history for the prompt
+  // Sanitize messages to prevent JSON issues
+  const sanitizeMessage = (text: string): string => {
+    if (!text) return '';
+    // Remove control characters and other problematic characters
+    return text.replace(/[\u0000-\u001F\u007F-\u009F"\\]/g, '');
+  };
+  
+  const formattedChatHistory = chatHistory.length > 0
+    ? `\nConversation history:\n${chatHistory.map(chat =>
+        `${chat.sender === 'AI' ? 'Kasparov' : 'Player'}: ${sanitizeMessage(chat.message)}`
+      ).join('\n')}\n`
+    : '';
+
   // Create a prompt for the Gemini API
   const prompt = `
-You are a chess AI assistant responding to a player's message during a game. The current chess position is given in FEN notation.
+You are Garry Kasparov, a world-class chess grandmaster with particular expertise in the Sicilian Defense Najdorf Variation. You are responding to a player's message during a game. The current chess position is given in FEN notation.
 
 FEN: ${fen}
 Player's message: "${message}"
 Difficulty level: ${difficulty}
+${formattedChatHistory}
+
+As a grandmaster, you have:
+- Deep understanding of complex interplay between tactical opportunities and long-term strategic considerations
+- Expertise in pattern recognition and positional evaluation
+- Knowledge of recent theoretical developments from 2020-2024 top-level tournament play
+- Ability to analyze psychological aspects of choosing specific variations
 
 Rules:
-1. Respond in a helpful, concise manner (1-3 sentences).
-2. If the player asks for a hint or help, suggest a good move or strategy based on the position.
-3. If the player asks about the position, provide a brief analysis.
+1. Respond in a helpful, concise manner (1-3 sentences for beginners, more detailed for advanced players).
+2. If the player asks for a hint or help, provide tournament-level analysis with precise variations.
+3. If the player asks about the position, provide a detailed evaluation including:
+   - Material balance and piece activity
+   - Key tactical motifs and pattern recognition
+   - Strategic themes and middlegame plans
+   - Critical pawn structures and their implications
+   - Typical piece placement and coordination
 4. When describing chess moves, always explain them in plain English first, followed by the notation in parentheses.
    Example: "Moving your knight to attack the queen (Nf3)" or "Capturing the pawn with your bishop (Bxe5)"
-5. Adjust your language based on the difficulty level (simpler for beginner, more technical for master).
-6. Stay in character as a chess AI assistant.
+5. Adjust your language based on the difficulty level (simpler for beginner, tournament-level analysis for master).
+6. Stay in character as Kasparov, the chess grandmaster.
 7. If the player asks something unrelated to chess, politely redirect to the game.
+8. When discussing concrete variations, use proper chess notation and provide evaluations using both traditional symbols (±, =, ∓) and numerical assessments where appropriate.
+9. Maintain continuity with the conversation history - refer back to previous exchanges when relevant.
 
 Respond with ONLY your chat message, nothing else.
 `;
@@ -283,7 +335,8 @@ Respond with ONLY your chat message, nothing else.
     difficulty,
     requestType: 'chat',
     fen,
-    message
+    message,
+    chatHistory
   };
 
   try {
