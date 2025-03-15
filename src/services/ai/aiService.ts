@@ -18,6 +18,7 @@ let useGeminiAPI = false;
  */
 export const setUseGeminiAPI = (enable: boolean): void => {
   useGeminiAPI = enable;
+  console.log(`Gemini API ${enable ? 'enabled' : 'disabled'} in aiService.ts`);
 };
 
 /**
@@ -25,6 +26,7 @@ export const setUseGeminiAPI = (enable: boolean): void => {
  * @returns Whether Gemini API is being used
  */
 export const isUsingGeminiAPI = (): boolean => {
+  console.log(`Current Gemini API status: ${useGeminiAPI ? 'enabled' : 'disabled'}`);
   return useGeminiAPI;
 };
 
@@ -241,8 +243,11 @@ export const findBestMove = async (
 ): Promise<{ from: Square; to: Square; promotion?: 'q' | 'r' | 'b' | 'n' } | null> => {
   // Try to use Gemini API if enabled
   if (useGeminiAPI) {
+    console.log(`Attempting to use Gemini API for move generation (difficulty: ${difficulty})`);
     try {
+      console.log(`Calling geminiBackendService.getBestMove with FEN: ${fen}`);
       const move = await geminiBackendService.getBestMove(fen, difficulty);
+      console.log(`Received move from Gemini API:`, move);
       return {
         from: move.from as Square,
         to: move.to as Square,
@@ -252,6 +257,8 @@ export const findBestMove = async (
       console.error('Failed to get move from Gemini API, falling back to local implementation:', error);
       // Fall back to local implementation
     }
+  } else {
+    console.log(`Using local implementation for move generation (Gemini API disabled)`);
   }
   
   // Local implementation

@@ -27,7 +27,10 @@ This guide explains how to deploy the Gemini API Lambda function to AWS and conf
 3. Add the following environment variables:
    - Key: `GEMINI_API_KEY`, Value: Your Google Gemini API key
    - Key: `LOG_DIR`, Value: `/tmp/chess-online-logs` (or another writable directory)
+   - Key: `ALLOWED_ORIGINS`, Value: A comma-separated list of allowed origins (e.g., `http://localhost:3000,https://your-domain.com`)
 4. Click "Save"
+
+> **Important**: The `ALLOWED_ORIGINS` environment variable is critical for CORS security. Only requests from these origins will be allowed to access the Lambda function. Make sure to include all domains where your frontend will be hosted.
 
 ### 3. Upload the Function Code
 
@@ -85,16 +88,37 @@ To view the logs:
 
 ### CORS Issues
 
-If you encounter CORS issues, make sure you've properly configured CORS in API Gateway:
+The Lambda function now includes proper CORS handling, but you might still encounter CORS issues. Here's how to troubleshoot them:
 
-1. Go to your API in the API Gateway console
-2. Select the resource
-3. Click on "Actions" and select "Enable CORS"
-4. Make sure to include the following headers:
-   - Access-Control-Allow-Origin: '*' (or your specific domain)
-   - Access-Control-Allow-Methods: 'POST, OPTIONS'
-   - Access-Control-Allow-Headers: 'Content-Type'
-5. Redeploy your API
+1. **Check the Lambda logs** in CloudWatch for CORS-related messages:
+   - Look for "CORS Check" log entries
+   - Verify if your origin is being recognized and allowed
+
+2. **Verify your ALLOWED_ORIGINS environment variable**:
+   - Make sure it includes all domains where your frontend is hosted
+   - Include `http://localhost:3000` for local development
+   - Check for typos or missing protocols (http:// or https://)
+
+3. **Check the browser console** for specific CORS error messages:
+   - They will indicate which origin was blocked
+   - They will show which headers or methods are not allowed
+
+4. **Test with curl** to isolate browser-specific issues:
+   ```bash
+   curl -X OPTIONS -H "Origin: http://localhost:3000" -H "Access-Control-Request-Method: POST" https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod/gemini
+   ```
+
+5. **API Gateway configuration**:
+   - The Lambda function handles CORS directly, but API Gateway might still need configuration
+   - Go to your API in the API Gateway console
+   - Select the resource
+   - Click on "Actions" and select "Enable CORS"
+   - Make sure to include the appropriate headers
+   - Redeploy your API
+
+6. **Check for proxy issues**:
+   - If you're using a proxy or CDN, it might be modifying the Origin header
+   - Verify the headers being sent to the Lambda function in the logs
 
 ### Lambda Execution Issues
 

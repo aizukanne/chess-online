@@ -6,10 +6,12 @@ import {
   FormControlLabel,
   Alert,
   Collapse,
-  IconButton
+  IconButton,
+  Button,
+  Box
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { setUseGeminiAPI } from '../../services/ai/aiService';
+import { setUseGeminiAPI, isUsingGeminiAPI } from '../../services/ai/aiService';
 
 // Local storage key
 const USE_GEMINI_STORAGE_KEY = 'chess-online-use-gemini';
@@ -20,14 +22,24 @@ const GeminiConfig: React.FC = () => {
   const [alertMessage, setAlertMessage] = useState<string>('');
   const [alertSeverity, setAlertSeverity] = useState<'success' | 'error' | 'info' | 'warning'>('info');
 
+  // Log component mount
+  useEffect(() => {
+    console.log('GeminiConfig component mounted');
+  }, []);
+
   // Load saved settings on component mount
   useEffect(() => {
     const savedUseGemini = localStorage.getItem(USE_GEMINI_STORAGE_KEY) === 'true';
+    
+    console.log('Loading saved Gemini settings from localStorage:');
+    console.log('USE_GEMINI_STORAGE_KEY:', USE_GEMINI_STORAGE_KEY);
+    console.log('savedUseGemini:', savedUseGemini);
     
     setUseGemini(savedUseGemini);
     
     // Initialize Gemini if it was previously enabled
     if (savedUseGemini) {
+      console.log('Gemini was previously enabled, initializing...');
       try {
         setUseGeminiAPI(true);
       } catch (error) {
@@ -35,6 +47,8 @@ const GeminiConfig: React.FC = () => {
         setUseGemini(false);
         setUseGeminiAPI(false);
       }
+    } else {
+      console.log('Gemini was previously disabled, not initializing');
     }
   }, []);
 
@@ -43,6 +57,8 @@ const GeminiConfig: React.FC = () => {
     const newValue = event.target.checked;
     setUseGemini(newValue);
     
+    console.log(`Gemini API toggle changed to: ${newValue}`);
+    
     // Save settings
     localStorage.setItem(USE_GEMINI_STORAGE_KEY, newValue.toString());
     
@@ -50,6 +66,7 @@ const GeminiConfig: React.FC = () => {
       try {
         // Enable Gemini API
         setUseGeminiAPI(true);
+        console.log('Gemini API enabled via setUseGeminiAPI(true)');
         showAlertMessage('Gemini AI enabled successfully', 'success');
       } catch (error) {
         console.error('Failed to initialize Gemini service:', error);
@@ -60,6 +77,7 @@ const GeminiConfig: React.FC = () => {
     } else {
       // Disable Gemini
       setUseGeminiAPI(false);
+      console.log('Gemini API disabled via setUseGeminiAPI(false)');
       showAlertMessage('Gemini AI disabled', 'info');
     }
   };
@@ -106,16 +124,32 @@ const GeminiConfig: React.FC = () => {
         </Alert>
       </Collapse>
       
-      <FormControlLabel
-        control={
-          <Switch
-            checked={useGemini}
-            onChange={handleToggleChange}
-            color="primary"
-          />
-        }
-        label="Use Gemini AI for chess engine"
-      />
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={useGemini}
+              onChange={handleToggleChange}
+              color="primary"
+            />
+          }
+          label="Use Gemini AI for chess engine"
+        />
+        
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => {
+            console.log('Current Gemini state:');
+            console.log('- useGemini state:', useGemini);
+            console.log('- isUsingGeminiAPI():', isUsingGeminiAPI());
+            showAlertMessage(`Gemini API is ${isUsingGeminiAPI() ? 'enabled' : 'disabled'}`, 'info');
+          }}
+          sx={{ ml: 2 }}
+        >
+          Test Gemini State
+        </Button>
+      </Box>
       
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
         {useGemini
