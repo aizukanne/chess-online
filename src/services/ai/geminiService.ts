@@ -33,7 +33,7 @@ interface GeminiResponse {
  */
 export class GeminiService {
   private apiKey: string;
-  private apiUrl: string = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+  private apiUrl: string = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
