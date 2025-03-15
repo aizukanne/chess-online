@@ -1,11 +1,4 @@
-import fs from 'fs';
-import path from 'path';
 import https from 'https';
-import { fileURLToPath } from 'url';
-
-// Get the directory name using ES module approach
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Gemini API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -16,27 +9,17 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['http://localhost:3000', 'https://chess-online.example.com'];
 
-// Log file configuration
-const LOG_DIR = process.env.LOG_DIR || '/tmp/chess-online-logs';
-const LOG_FILE = path.join(LOG_DIR, 'gemini-api.log');
-
-// Ensure log directory exists
-if (!fs.existsSync(LOG_DIR)) {
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-}
+// Enable debug logging
+const DEBUG = process.env.DEBUG === 'true' || true;
 
 /**
- * Log a message to the log file
+ * Log a message with timestamp
  * @param {string} message - The message to log
  */
 const logMessage = (message) => {
-  const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] ${message}\n`;
-  
-  try {
-    fs.appendFileSync(LOG_FILE, logEntry);
-  } catch (error) {
-    console.error('Error writing to log file:', error);
+  if (DEBUG) {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${message}`);
   }
 };
 
@@ -49,7 +32,7 @@ const logMessage = (message) => {
 const callGeminiAPI = (prompt, temperature = 0.7) => {
   return new Promise((resolve, reject) => {
     // Log the request
-    logMessage(`REQUEST:\nPrompt: ${prompt}\nTemperature: ${temperature}`);
+    console.log(`REQUEST:\nPrompt: ${prompt.substring(0, 100)}...\nTemperature: ${temperature}`);
     
     // Prepare the request data
     const requestData = JSON.stringify({
@@ -88,8 +71,16 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       });
       
       res.on('end', () => {
-        // Log the response
-        logMessage(`RESPONSE:\nStatus: ${res.statusCode}\nData: ${responseData}`);
+        // Log the response status
+        console.log(`RESPONSE:\nStatus: ${res.statusCode}`);
+        
+        // Log a truncated version of the response data to avoid cluttering logs
+        if (DEBUG) {
+          const truncatedResponse = responseData.length > 200
+            ? responseData.substring(0, 200) + '...'
+            : responseData;
+          console.log(`Response data: ${truncatedResponse}`);
+        }
         
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try {
@@ -110,7 +101,7 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
     });
     
     req.on('error', (error) => {
-      logMessage(`ERROR: ${error.message}`);
+      console.error(`ERROR: ${error.message}`);
       reject(error);
     });
     
@@ -129,7 +120,7 @@ const getCorsHeaders = (origin) => {
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : null;
   
   // Log the CORS check
-  logMessage(`CORS Check: Origin: ${origin}, Allowed: ${allowedOrigin ? 'Yes' : 'No'}`);
+  console.log(`CORS Check: Origin: ${origin}, Allowed: ${allowedOrigin ? 'Yes' : 'No'}`);
   
   // Return CORS headers
   return {
@@ -148,18 +139,24 @@ const getCorsHeaders = (origin) => {
  */
 export const handler = async (event, context) => {
   // Log the Lambda invocation
-  logMessage(`LAMBDA INVOCATION:\nEvent: ${JSON.stringify(event)}`);
+  console.log(`LAMBDA INVOCATION: ${event.httpMethod} request received`);
+  
+  if (DEBUG) {
+    // Log event details in debug mode, but truncate to avoid huge logs
+    const eventStr = JSON.stringify(event);
+    console.log(`Event details: ${eventStr.length > 200 ? eventStr.substring(0, 200) + '...' : eventStr}`);
+  }
   
   // Get the origin from the request headers
   const origin = event.headers?.origin || event.headers?.Origin || '';
-  logMessage(`Request Origin: ${origin}`);
+  console.log(`Request Origin: ${origin}`);
   
   // Get CORS headers
   const corsHeaders = getCorsHeaders(origin);
   
   // Handle OPTIONS request (CORS preflight)
   if (event.httpMethod === 'OPTIONS') {
-    logMessage('Handling OPTIONS request (CORS preflight)');
+    console.log('Handling OPTIONS request (CORS preflight)');
     return {
       statusCode: 200,
       headers: corsHeaders,
@@ -171,7 +168,7 @@ export const handler = async (event, context) => {
   if (event.httpMethod === 'POST') {
     // Check if origin is allowed
     if (!ALLOWED_ORIGINS.includes(origin)) {
-      logMessage(`Blocked request from disallowed origin: ${origin}`);
+      console.log(`Blocked request from disallowed origin: ${origin}`);
       return {
         statusCode: 403,
         headers: corsHeaders,
@@ -188,7 +185,11 @@ export const handler = async (event, context) => {
       const { prompt, temperature, difficulty, requestType, fen, message } = body;
       
       // Log the request details
-      logMessage(`REQUEST DETAILS:\nType: ${requestType}\nDifficulty: ${difficulty}\nFEN: ${fen}\nMessage: ${message || 'N/A'}`);
+      console.log(`REQUEST DETAILS: Type: ${requestType}, Difficulty: ${difficulty}`);
+      if (DEBUG) {
+        console.log(`FEN: ${fen}`);
+        console.log(`Message: ${message || 'N/A'}`);
+      }
       
       // Call the Gemini API
       const response = await callGeminiAPI(prompt, temperature);
@@ -204,7 +205,7 @@ export const handler = async (event, context) => {
       };
     } catch (error) {
       // Log the error
-      logMessage(`ERROR: ${error.message}`);
+      console.error(`ERROR: ${error.message}`);
       
       // Return the error
       return {
@@ -219,6 +220,7 @@ export const handler = async (event, context) => {
   }
   
   // Handle unsupported methods
+  console.log(`Unsupported method: ${event.httpMethod}`);
   return {
     statusCode: 405,
     headers: corsHeaders,
