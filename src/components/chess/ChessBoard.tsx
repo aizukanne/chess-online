@@ -131,7 +131,9 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
 
   // Game status display
   const renderGameStatus = () => {
-    if (isCheckmate) {
+    if (status === 'not-started') {
+      return <Typography variant="h6" color="text.secondary">Game not started</Typography>;
+    } else if (isCheckmate) {
       return <Typography variant="h6" color="error">Checkmate! {turn === 'w' ? 'Black' : 'White'} wins</Typography>;
     } else if (isDraw) {
       return <Typography variant="h6" color="info.main">Game ended in a draw</Typography>;
@@ -146,24 +148,46 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
       {renderGameStatus()}
       
-      <Chessboard
-        id="chess-board"
-        position={fen}
-        onPieceDrop={onDrop}
-        customBoardStyle={{
-          borderRadius: '4px',
-          boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)'
-        }}
-        customSquareStyles={{
-          ...(isCheck && turn === 'w' ? { e1: { backgroundColor: 'rgba(255, 0, 0, 0.5)' } } : {}),
-          ...(isCheck && turn === 'b' ? { e8: { backgroundColor: 'rgba(255, 0, 0, 0.5)' } } : {})
-        }}
-        areArrowsAllowed={true}
-        showBoardNotation={showNotation}
-        boardWidth={width}
-        // Allow user to select promotion piece
-        onPromotionPieceSelect={handlePromotionPieceSelect}
-      />
+      <Box sx={{ position: 'relative' }}>
+        <Chessboard
+          id="chess-board"
+          position={fen}
+          onPieceDrop={status === 'in-progress' ? onDrop : () => false}
+          customBoardStyle={{
+            borderRadius: '4px',
+            boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)',
+            ...(status !== 'in-progress' ? { opacity: 0.7 } : {})
+          }}
+          customSquareStyles={{
+            ...(isCheck && turn === 'w' ? { e1: { backgroundColor: 'rgba(255, 0, 0, 0.5)' } } : {}),
+            ...(isCheck && turn === 'b' ? { e8: { backgroundColor: 'rgba(255, 0, 0, 0.5)' } } : {})
+          }}
+          areArrowsAllowed={status === 'in-progress'}
+          showBoardNotation={showNotation}
+          boardWidth={width}
+          // Allow user to select promotion piece
+          onPromotionPieceSelect={handlePromotionPieceSelect}
+        />
+        
+        {status === 'not-started' && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              bgcolor: 'rgba(0, 0, 0, 0.6)',
+              color: 'white',
+              p: 2,
+              borderRadius: 2,
+              textAlign: 'center',
+              zIndex: 10
+            }}
+          >
+            <Typography variant="h6">Click "New Game" to Start</Typography>
+          </Box>
+        )}
+      </Box>
       
       <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
         <Button 

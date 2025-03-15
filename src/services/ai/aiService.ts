@@ -443,14 +443,13 @@ export const generateAIChatResponse = async (
   message: string,
   difficulty: AIDifficulty = 'intermediate'
 ): Promise<string> => {
-  // Try to use Gemini API if enabled
-  if (useGeminiAPI) {
-    try {
-      return await geminiBackendService.getChatResponse(fen, message, difficulty);
-    } catch (error) {
-      console.error('Failed to get chat response from Gemini API, falling back to local implementation:', error);
-      // Fall back to local implementation
-    }
+  // Always try to use Gemini API for chat responses first
+  try {
+    console.log('Attempting to use Gemini API for chat response');
+    return await geminiBackendService.getChatResponse(fen, message, difficulty);
+  } catch (error) {
+    console.error('Failed to get chat response from Gemini API, falling back to local implementation:', error);
+    // Fall back to local implementation
   }
   
   // Local implementation
@@ -461,14 +460,46 @@ export const generateAIChatResponse = async (
   if (lowerMessage.includes('hint') || lowerMessage.includes('help') || lowerMessage.includes('what should i do')) {
     const bestMove = await findBestMove(fen, difficulty);
     if (bestMove) {
-      const moveString = `${bestMove.from} to ${bestMove.to}${bestMove.promotion ? ' promoting to ' + bestMove.promotion : ''}`;
+      // Get piece type and create a more descriptive move
+      const chess = new Chess(fen);
+      const piece = chess.get(bestMove.from as Square);
+      const targetPiece = chess.get(bestMove.to as Square);
+      
+      let pieceType = '';
+      switch (piece?.type) {
+        case 'p': pieceType = 'pawn'; break;
+        case 'n': pieceType = 'knight'; break;
+        case 'b': pieceType = 'bishop'; break;
+        case 'r': pieceType = 'rook'; break;
+        case 'q': pieceType = 'queen'; break;
+        case 'k': pieceType = 'king'; break;
+      }
+      
+      // Create notation
+      const notation = `${bestMove.from}-${bestMove.to}${bestMove.promotion ? '=' + bestMove.promotion.toUpperCase() : ''}`;
+      
+      // Create description
+      let moveDescription = '';
+      if (targetPiece) {
+        moveDescription = `capturing the ${targetPiece.type === 'p' ? 'pawn' :
+                                         targetPiece.type === 'n' ? 'knight' :
+                                         targetPiece.type === 'b' ? 'bishop' :
+                                         targetPiece.type === 'r' ? 'rook' :
+                                         targetPiece.type === 'q' ? 'queen' : 'king'} with your ${pieceType}`;
+      } else if (bestMove.promotion) {
+        moveDescription = `advancing your pawn to promote to a ${bestMove.promotion === 'q' ? 'queen' :
+                                                                 bestMove.promotion === 'r' ? 'rook' :
+                                                                 bestMove.promotion === 'b' ? 'bishop' : 'knight'}`;
+      } else {
+        moveDescription = `moving your ${pieceType} from ${bestMove.from} to ${bestMove.to}`;
+      }
       
       if (difficulty === 'beginner') {
-        return `I suggest moving from ${moveString}. This looks like a good move to me.`;
+        return `I suggest ${moveDescription} (${notation}). This looks like a good move to me.`;
       } else if (difficulty === 'intermediate') {
-        return `You might want to consider ${moveString}. This move helps improve your position.`;
+        return `You might want to consider ${moveDescription} (${notation}). This move helps improve your position.`;
       } else {
-        return `A strong move would be ${moveString}. This improves your piece coordination and creates threats.`;
+        return `A strong move would be ${moveDescription} (${notation}). This improves your piece coordination and creates threats.`;
       }
     } else {
       return "I don't see any good moves in this position. The game might be over.";

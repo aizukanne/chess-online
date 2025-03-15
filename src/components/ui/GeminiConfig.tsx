@@ -3,7 +3,6 @@ import {
   Paper,
   Typography,
   Switch,
-  FormControlLabel,
   Alert,
   Collapse,
   IconButton,
@@ -95,71 +94,60 @@ const GeminiConfig: React.FC = () => {
   };
 
   return (
-    <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Gemini AI Configuration
-      </Typography>
-      
-      <Typography variant="body2" color="text.secondary" paragraph>
-        Enable Google Gemini AI to enhance the chess engine with advanced capabilities.
-        The API key is configured on the server for security.
-      </Typography>
-      
-      <Collapse in={showAlert}>
-        <Alert
-          severity={alertSeverity}
-          action={
-            <IconButton
-              aria-label="close"
-              color="inherit"
-              size="small"
-              onClick={() => setShowAlert(false)}
-            >
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          }
-          sx={{ mb: 2 }}
-        >
-          {alertMessage}
-        </Alert>
-      </Collapse>
-      
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={useGemini}
-              onChange={handleToggleChange}
-              color="primary"
-            />
-          }
-          label="Use Gemini AI for chess engine"
-        />
+    <Paper elevation={1} sx={{ p: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography variant="subtitle1">Gemini AI</Typography>
+          
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              console.log('Current Gemini state:');
+              console.log('- useGemini state:', useGemini);
+              console.log('- isUsingGeminiAPI():', isUsingGeminiAPI());
+              showAlertMessage(`Gemini API is ${isUsingGeminiAPI() ? 'enabled' : 'disabled'}`, 'info');
+            }}
+          >
+            Test
+          </Button>
+        </Box>
         
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() => {
-            console.log('Current Gemini state:');
-            console.log('- useGemini state:', useGemini);
-            console.log('- isUsingGeminiAPI():', isUsingGeminiAPI());
-            showAlertMessage(`Gemini API is ${isUsingGeminiAPI() ? 'enabled' : 'disabled'}`, 'info');
-          }}
-          sx={{ ml: 2 }}
-        >
-          Test Gemini State
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <Switch
+            checked={useGemini}
+            onChange={handleToggleChange}
+            color="primary"
+            size="small"
+          />
+          <Typography variant="body2" sx={{ ml: 1 }}>
+            {useGemini ? "Enabled" : "Disabled"}
+          </Typography>
+        </Box>
+        
+        <Collapse in={showAlert}>
+          <Alert
+            severity={alertSeverity}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={() => setShowAlert(false)}
+              >
+                <CloseIcon fontSize="inherit" />
+              </IconButton>
+            }
+            sx={{ mt: 1, py: 0 }}
+          >
+            {alertMessage}
+          </Alert>
+        </Collapse>
+        
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          Using local chess engine. Enable Gemini AI for advanced capabilities.
+        </Typography>
       </Box>
-      
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-        {useGemini
-          ? "Gemini AI is currently enabled. The chess engine will use Gemini for move generation and analysis."
-          : "Gemini AI is currently disabled. The chess engine will use the local implementation."}
-      </Typography>
-      
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-        Note: All Gemini API requests are processed on the server and logged for debugging purposes.
-      </Typography>
     </Paper>
   );
 };
