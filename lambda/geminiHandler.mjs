@@ -11,6 +11,11 @@ const __dirname = path.dirname(__filename);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
+// CORS configuration
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:3000', 'https://chess-online.example.com'];
+
 // Log file configuration
 const LOG_DIR = process.env.LOG_DIR || '/tmp/chess-online-logs';
 const LOG_FILE = path.join(LOG_DIR, 'gemini-api.log');
@@ -115,6 +120,27 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
 };
 
 /**
+ * Get CORS headers based on the origin
+ * @param {string} origin - The origin from the request headers
+ * @returns {Object} - CORS headers
+ */
+const getCorsHeaders = (origin) => {
+  // Check if the origin is allowed
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : null;
+  
+  // Log the CORS check
+  logMessage(`CORS Check: Origin: ${origin}, Allowed: ${allowedOrigin ? 'Yes' : 'No'}`);
+  
+  // Return CORS headers
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin || 'null', // Only allow specific origins
+    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key',
+    'Access-Control-Allow-Methods': 'OPTIONS,POST',
+    'Content-Type': 'application/json; charset=utf-8'
+  };
+};
+
+/**
  * Lambda handler function
  * @param {Object} event - The Lambda event
  * @param {Object} context - The Lambda context
@@ -124,48 +150,81 @@ export const handler = async (event, context) => {
   // Log the Lambda invocation
   logMessage(`LAMBDA INVOCATION:\nEvent: ${JSON.stringify(event)}`);
   
-  try {
-    // Parse the request body
-    const body = JSON.parse(event.body);
-    const { prompt, temperature, difficulty, requestType, fen, message } = body;
-    
-    // Log the request details
-    logMessage(`REQUEST DETAILS:\nType: ${requestType}\nDifficulty: ${difficulty}\nFEN: ${fen}\nMessage: ${message || 'N/A'}`);
-    
-    // Call the Gemini API
-    const response = await callGeminiAPI(prompt, temperature);
-    
-    // Return the response
+  // Get the origin from the request headers
+  const origin = event.headers?.origin || event.headers?.Origin || '';
+  logMessage(`Request Origin: ${origin}`);
+  
+  // Get CORS headers
+  const corsHeaders = getCorsHeaders(origin);
+  
+  // Handle OPTIONS request (CORS preflight)
+  if (event.httpMethod === 'OPTIONS') {
+    logMessage('Handling OPTIONS request (CORS preflight)');
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      },
-      body: JSON.stringify({
-        content: response,
-        success: true
-      })
-    };
-  } catch (error) {
-    // Log the error
-    logMessage(`ERROR: ${error.message}`);
-    
-    // Return the error
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      },
-      body: JSON.stringify({
-        error: error.message,
-        success: false
-      })
+      headers: corsHeaders,
+      body: JSON.stringify('CORS preflight successful')
     };
   }
+  
+  // Handle POST request
+  if (event.httpMethod === 'POST') {
+    // Check if origin is allowed
+    if (!ALLOWED_ORIGINS.includes(origin)) {
+      logMessage(`Blocked request from disallowed origin: ${origin}`);
+      return {
+        statusCode: 403,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          error: 'Forbidden: Origin not allowed',
+          success: false
+        })
+      };
+    }
+    
+    try {
+      // Parse the request body
+      const body = JSON.parse(event.body);
+      const { prompt, temperature, difficulty, requestType, fen, message } = body;
+      
+      // Log the request details
+      logMessage(`REQUEST DETAILS:\nType: ${requestType}\nDifficulty: ${difficulty}\nFEN: ${fen}\nMessage: ${message || 'N/A'}`);
+      
+      // Call the Gemini API
+      const response = await callGeminiAPI(prompt, temperature);
+      
+      // Return the response
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          content: response,
+          success: true
+        })
+      };
+    } catch (error) {
+      // Log the error
+      logMessage(`ERROR: ${error.message}`);
+      
+      // Return the error
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          error: error.message,
+          success: false
+        })
+      };
+    }
+  }
+  
+  // Handle unsupported methods
+  return {
+    statusCode: 405,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      error: 'Method not allowed',
+      success: false
+    })
+  };
 };

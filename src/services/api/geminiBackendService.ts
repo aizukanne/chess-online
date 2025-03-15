@@ -5,11 +5,19 @@ import { AIDifficulty } from '../ai/aiService';
  * This service communicates with the Lambda function that handles Gemini API calls
  */
 
+// Log environment variables on load
+console.log('Environment variables in geminiBackendService.ts:');
+console.log('REACT_APP_LAMBDA_API_ENDPOINT:', process.env.REACT_APP_LAMBDA_API_ENDPOINT);
+console.log('REACT_APP_DEBUG:', process.env.REACT_APP_DEBUG);
+
 // API endpoint for the Lambda function
 const LAMBDA_API_ENDPOINT = process.env.REACT_APP_LAMBDA_API_ENDPOINT || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
 
-// Log file path on the server
-const LOG_FILE_PATH = '/var/log/chess-online/gemini-api.log';
+// Enable console logging for debugging
+const DEBUG = process.env.REACT_APP_DEBUG === 'true' || true;
+
+console.log('Configured LAMBDA_API_ENDPOINT:', LAMBDA_API_ENDPOINT);
+console.log('Debugging enabled:', DEBUG);
 
 /**
  * Interface for Gemini API request
@@ -38,7 +46,19 @@ interface GeminiResponse {
  * @returns The response from the API
  */
 const sendGeminiRequest = async (request: GeminiRequest): Promise<GeminiResponse> => {
+  if (DEBUG) {
+    console.log('Sending request to Gemini API:', {
+      endpoint: `${LAMBDA_API_ENDPOINT}/gemini`,
+      request
+    });
+  }
+  
   try {
+    // Check if the API endpoint is configured
+    if (LAMBDA_API_ENDPOINT === 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod') {
+      console.warn('Lambda API endpoint not configured. Please set REACT_APP_LAMBDA_API_ENDPOINT in .env file.');
+    }
+    
     const response = await fetch(`${LAMBDA_API_ENDPOINT}/gemini`, {
       method: 'POST',
       headers: {
@@ -47,11 +67,24 @@ const sendGeminiRequest = async (request: GeminiRequest): Promise<GeminiResponse
       body: JSON.stringify(request)
     });
 
+    if (DEBUG) {
+      console.log('Received response from Gemini API:', {
+        status: response.status,
+        statusText: response.statusText
+      });
+    }
+
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    
+    if (DEBUG) {
+      console.log('Parsed response data:', data);
+    }
+
+    return data;
   } catch (error) {
     console.error('Gemini API request failed:', error);
     throw error;

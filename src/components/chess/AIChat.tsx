@@ -15,7 +15,7 @@ import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { useAppSelector, useAppDispatch } from '../../store';
 import { addChatMessage } from '../../store/gameSlice';
-import { generateAIChatResponse } from '../../services/ai/aiService';
+import { generateAIChatResponse, isUsingGeminiAPI } from '../../services/ai/aiService';
 
 const AIChat: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -34,6 +34,8 @@ const AIChat: React.FC = () => {
 
   const handleSendMessage = async () => {
     if (message.trim()) {
+      console.log('AIChat: Sending message:', message.trim());
+      
       // Add user message to chat
       dispatch(addChatMessage({
         sender: user?.username || 'Player',
@@ -47,8 +49,16 @@ const AIChat: React.FC = () => {
       setIsLoading(true);
       
       try {
+        // Log current state
+        console.log('AIChat: Current state:');
+        console.log('- FEN:', fen);
+        console.log('- AI Difficulty:', aiDifficulty || 'intermediate');
+        console.log('- isUsingGeminiAPI():', isUsingGeminiAPI());
+        
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log('AIChat: Calling generateAIChatResponse...');
         
         // Generate AI response
         const aiResponse = await generateAIChatResponse(
@@ -56,6 +66,8 @@ const AIChat: React.FC = () => {
           message.trim(),
           aiDifficulty || 'intermediate'
         );
+        
+        console.log('AIChat: Received AI response:', aiResponse);
         
         // Add AI response to chat
         dispatch(addChatMessage({
