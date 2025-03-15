@@ -90,7 +90,10 @@ export class GeminiService {
    * @param difficulty AI difficulty level
    * @returns The best move in the format { from, to, promotion }
    */
-  async getBestMove(fen: string, difficulty: AIDifficulty): Promise<{ from: string; to: string; promotion?: string }> {
+  async getBestMove(fen: string, difficulty: AIDifficulty, retryCount = 0): Promise<{ from: string; to: string; promotion?: string }> {
+    // Maximum number of retries
+    const MAX_RETRIES = 3;
+    
     // Adjust temperature based on difficulty
     const temperatureMap: Record<AIDifficulty, number> = {
       beginner: 0.9,
@@ -102,7 +105,7 @@ export class GeminiService {
     const temperature = temperatureMap[difficulty];
 
     // Create a prompt for the Gemini API
-    const prompt = `
+    let prompt = `
 You are a chess engine assistant. Analyze the following chess position in FEN notation and suggest the best move.
 
 FEN: ${fen}
@@ -110,21 +113,38 @@ FEN: ${fen}
 Difficulty level: ${difficulty}
 
 Rules:
-1. Provide only a single move in clear English and also in the format "e2e4" (from square to square).
-2. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
-3. The move must be legal according to chess rules.
-4. For beginner difficulty, you can make suboptimal but reasonable moves.
-5. For master difficulty, provide the strongest move you can find.
+1. First, provide a brief explanation of your move in clear English (1-2 sentences).
+2. Then, provide the move in the format "e2e4" (from square to square), NOT in algebraic notation.
+3. DO NOT use algebraic notation like "Nxf3+" or "Qd8". Always use the exact square-to-square format.
+4. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
+5. The move must be legal according to chess rules.
+6. For beginner difficulty, you can make suboptimal but reasonable moves.
+7. For master difficulty, provide the strongest move you can find.
+8. Format your response as: "Explanation: [your explanation]. Move: [from-square][to-square]"
 
-Respond with ONLY the move in the format described, nothing else.
-For beginner difficulty, you may provide reasons for the move to help the player learn.
+Example response:
+"Explanation: I'm developing my knight to a good square with tempo. Move: g1f3"
+
+IMPORTANT: Always use the exact square-to-square format (like "g1f3"), never use algebraic notation (like "Nf3").
 `;
+
+    // If this is a retry, add feedback about the previous error
+    if (retryCount > 0) {
+      prompt = `
+Your previous response contained an invalid move format. Please try again with a valid move.
+
+${prompt}
+
+CRITICAL: Your last response was invalid. You MUST provide the move in the format of exact squares like "e2e4" or "g1f3", NOT in algebraic notation like "Nxf3+" or "e4".
+`;
+    }
 
     try {
       const response = await this.makeRequest(prompt, temperature);
       
       if (response.candidates && response.candidates.length > 0) {
         const responseText = response.candidates[0].content.parts[0].text.trim();
+        console.log(`Gemini response for move: ${responseText}`);
         
         // Extract the move from the response
         // Look for patterns like "Move: e2e4" or just "e2e4"
@@ -141,7 +161,19 @@ For beginner difficulty, you may provide reasons for the move to help the player
             const promotion = moveText.length > 4 ? moveText.substring(4, 5) : undefined;
             
             console.log(`Extracted move: from=${from}, to=${to}, promotion=${promotion || 'none'}`);
-            return { from, to, promotion };
+            
+            // Validate that the move format is correct
+            if (/^[a-h][1-8]$/.test(from) && /^[a-h][1-8]$/.test(to)) {
+              return { from, to, promotion };
+            } else {
+              console.error(`Invalid move format: from=${from}, to=${to}`);
+              
+              // Retry with feedback if we haven't exceeded the maximum retries
+              if (retryCount < MAX_RETRIES) {
+                console.log(`Retrying getBestMove (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+                return this.getBestMove(fen, difficulty, retryCount + 1);
+              }
+            }
           }
         }
         
@@ -163,11 +195,24 @@ For beginner difficulty, you may provide reasons for the move to help the player
             }
           }
         }
+        
+        // If we still couldn't find a valid move and haven't exceeded retries
+        if (retryCount < MAX_RETRIES) {
+          console.log(`No valid move found, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+          return this.getBestMove(fen, difficulty, retryCount + 1);
+        }
       }
       
-      throw new Error('Invalid response from Gemini API');
+      throw new Error('Could not extract a valid move from Gemini API response after multiple attempts');
     } catch (error) {
       console.error('Failed to get move from Gemini API:', error);
+      
+      // Retry on error if we haven't exceeded the maximum retries
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Error getting move, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+        return this.getBestMove(fen, difficulty, retryCount + 1);
+      }
+      
       throw error;
     }
   }
@@ -178,7 +223,10 @@ For beginner difficulty, you may provide reasons for the move to help the player
    * @param difficulty AI difficulty level
    * @returns Analysis text
    */
-  async getPositionAnalysis(fen: string, difficulty: AIDifficulty): Promise<string> {
+  async getPositionAnalysis(fen: string, difficulty: AIDifficulty, retryCount = 0): Promise<string> {
+    // Maximum number of retries
+    const MAX_RETRIES = 2;
+    
     // Adjust temperature based on difficulty
     const temperatureMap: Record<AIDifficulty, number> = {
       beginner: 0.8,
@@ -190,7 +238,7 @@ For beginner difficulty, you may provide reasons for the move to help the player
     const temperature = temperatureMap[difficulty];
 
     // Create a prompt for the Gemini API
-    const prompt = `
+    let prompt = `
 You are a chess coach analyzing a position. Provide analysis for the following chess position in FEN notation.
 
 FEN: ${fen}
@@ -209,16 +257,50 @@ Rules:
 Respond with ONLY the analysis and FEN notation as described above.
 `;
 
+    // If this is a retry, add feedback about the previous error
+    if (retryCount > 0) {
+      prompt = `
+Your previous response was not in the correct format. Please try again.
+
+${prompt}
+
+IMPORTANT: Make sure to follow the format exactly as requested.
+`;
+    }
+
     try {
       const response = await this.makeRequest(prompt, temperature);
       
       if (response.candidates && response.candidates.length > 0) {
-        return response.candidates[0].content.parts[0].text.trim();
+        const analysisText = response.candidates[0].content.parts[0].text.trim();
+        console.log(`Gemini response for analysis: ${analysisText.substring(0, 100)}...`);
+        
+        // Validate that the response contains both analysis and position
+        if (analysisText.includes("Analysis:") && analysisText.includes("Position:")) {
+          return analysisText;
+        } else if (retryCount < MAX_RETRIES) {
+          console.log(`Analysis response not in correct format, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+          return this.getPositionAnalysis(fen, difficulty, retryCount + 1);
+        }
+        
+        // If we've exceeded retries but the format is still wrong, return it anyway
+        return analysisText;
       }
       
-      throw new Error('Invalid response from Gemini API');
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Invalid response, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+        return this.getPositionAnalysis(fen, difficulty, retryCount + 1);
+      }
+      
+      throw new Error('Invalid response from Gemini API after multiple attempts');
     } catch (error) {
       console.error('Failed to get analysis from Gemini API:', error);
+      
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Error getting analysis, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+        return this.getPositionAnalysis(fen, difficulty, retryCount + 1);
+      }
+      
       throw error;
     }
   }
@@ -230,7 +312,10 @@ Respond with ONLY the analysis and FEN notation as described above.
    * @param difficulty AI difficulty level
    * @returns Chat response text
    */
-  async getChatResponse(fen: string, message: string, difficulty: AIDifficulty): Promise<string> {
+  async getChatResponse(fen: string, message: string, difficulty: AIDifficulty, retryCount = 0): Promise<string> {
+    // Maximum number of retries
+    const MAX_RETRIES = 2;
+    
     // Adjust temperature based on difficulty and message content
     let temperature = 0.7;
     
@@ -241,7 +326,7 @@ Respond with ONLY the analysis and FEN notation as described above.
     }
 
     // Create a prompt for the Gemini API
-    const prompt = `
+    let prompt = `
 You are a chess AI assistant responding to a player's message during a game. The current chess position is given in FEN notation.
 
 FEN: ${fen}
@@ -261,16 +346,50 @@ Rules:
 Respond with ONLY your chat message and the FEN notation as described above.
 `;
 
+    // If this is a retry, add feedback about the previous error
+    if (retryCount > 0) {
+      prompt = `
+Your previous response was not in the correct format. Please try again.
+
+${prompt}
+
+IMPORTANT: Make sure to follow the format exactly as requested, including both the response and the position.
+`;
+    }
+
     try {
       const response = await this.makeRequest(prompt, temperature);
       
       if (response.candidates && response.candidates.length > 0) {
-        return response.candidates[0].content.parts[0].text.trim();
+        const chatText = response.candidates[0].content.parts[0].text.trim();
+        console.log(`Gemini response for chat: ${chatText.substring(0, 100)}...`);
+        
+        // Validate that the response contains both response and position
+        if (chatText.includes("Response:") && chatText.includes("Position:")) {
+          return chatText;
+        } else if (retryCount < MAX_RETRIES) {
+          console.log(`Chat response not in correct format, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+          return this.getChatResponse(fen, message, difficulty, retryCount + 1);
+        }
+        
+        // If we've exceeded retries but the format is still wrong, return it anyway
+        return chatText;
       }
       
-      throw new Error('Invalid response from Gemini API');
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Invalid response, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+        return this.getChatResponse(fen, message, difficulty, retryCount + 1);
+      }
+      
+      throw new Error('Invalid response from Gemini API after multiple attempts');
     } catch (error) {
       console.error('Failed to get chat response from Gemini API:', error);
+      
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Error getting chat response, retrying (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+        return this.getChatResponse(fen, message, difficulty, retryCount + 1);
+      }
+      
       throw error;
     }
   }
