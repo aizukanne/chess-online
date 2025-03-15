@@ -26,8 +26,8 @@ This guide explains how to deploy the Gemini API Lambda function to AWS and conf
 2. Click on "Environment variables"
 3. Add the following environment variables:
    - Key: `GEMINI_API_KEY`, Value: Your Google Gemini API key
-   - Key: `LOG_DIR`, Value: `/tmp/chess-online-logs` (or another writable directory)
    - Key: `ALLOWED_ORIGINS`, Value: A comma-separated list of allowed origins (e.g., `http://localhost:3000,https://your-domain.com`)
+   - Key: `DEBUG`, Value: `true` to enable detailed logging (optional)
 4. Click "Save"
 
 > **Important**: The `ALLOWED_ORIGINS` environment variable is critical for CORS security. Only requests from these origins will be allowed to access the Lambda function. Make sure to include all domains where your frontend will be hosted.
@@ -77,12 +77,23 @@ This guide explains how to deploy the Gemini API Lambda function to AWS and conf
 
 ## Logging Configuration
 
-The Lambda function logs all Gemini API requests and responses to a file in the specified `LOG_DIR`. By default, this is set to `/tmp/chess-online-logs/gemini-api.log`.
+The Lambda function now logs all Gemini API requests and responses directly to CloudWatch Logs using `console.log` statements.
 
 To view the logs:
 
-1. Use CloudWatch Logs to view the Lambda function logs
-2. The Gemini API requests and responses will be logged to the file specified in the `LOG_DIR` environment variable
+1. Go to the AWS CloudWatch console
+2. Navigate to Log Groups
+3. Find the log group for your Lambda function (usually /aws/lambda/your-function-name)
+4. View the log streams for detailed execution logs
+
+The logs include:
+- Lambda invocation details
+- CORS checks and origin validation
+- Request details (truncated to avoid excessive log size)
+- Response status and data (truncated)
+- Any errors that occur
+
+You can enable more detailed logging by setting the `DEBUG` environment variable to `true`.
 
 ## Troubleshooting
 

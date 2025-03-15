@@ -48,7 +48,7 @@ interface GeminiResponse {
 const sendGeminiRequest = async (request: GeminiRequest): Promise<GeminiResponse> => {
   if (DEBUG) {
     console.log('Sending request to Gemini API:', {
-      endpoint: `${LAMBDA_API_ENDPOINT}/gemini`,
+      endpoint: LAMBDA_API_ENDPOINT,
       request
     });
   }
@@ -59,7 +59,7 @@ const sendGeminiRequest = async (request: GeminiRequest): Promise<GeminiResponse
       console.warn('Lambda API endpoint not configured. Please set REACT_APP_LAMBDA_API_ENDPOINT in .env file.');
     }
     
-    const response = await fetch(`${LAMBDA_API_ENDPOINT}/gemini`, {
+    const response = await fetch(`${LAMBDA_API_ENDPOINT}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
