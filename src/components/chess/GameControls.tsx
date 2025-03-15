@@ -1,12 +1,10 @@
 import React from 'react';
-import { 
-  Box, 
-  Button, 
-  Typography, 
-  FormControl, 
-  InputLabel, 
-  Select, 
-  MenuItem, 
+import {
+  Box,
+  Button,
+  Typography,
+  Select,
+  MenuItem,
   SelectChangeEvent,
   Paper
 } from '@mui/material';
@@ -49,61 +47,65 @@ const GameControls: React.FC<GameControlsProps> = ({ onNewGame }) => {
   };
 
   return (
-    <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-      <Typography variant="h6" gutterBottom>Game Settings</Typography>
-      
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, mb: 3 }}>
-        <FormControl fullWidth>
-          <InputLabel id="game-type-label">Game Type</InputLabel>
-          <Select
-            labelId="game-type-label"
-            id="game-type-select"
-            value={selectedGameType}
-            label="Game Type"
-            onChange={handleGameTypeChange}
+    <Paper elevation={1} sx={{ p: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="subtitle1">Game Settings</Typography>
+          
+          <Button
+            variant="contained"
+            color="primary"
+            size="small"
+            onClick={handleStartNewGame}
           >
-            <MenuItem value="vs-computer">Play vs Computer</MenuItem>
-            <MenuItem value="real-time">Real-time Multiplayer</MenuItem>
-            <MenuItem value="turn-based">Turn-based Multiplayer</MenuItem>
-          </Select>
-        </FormControl>
+            New Game
+          </Button>
+        </Box>
         
-        {selectedGameType === 'vs-computer' && (
-          <FormControl fullWidth>
-            <InputLabel id="difficulty-label">AI Difficulty</InputLabel>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: '140px' }}>
+            <Typography variant="caption" sx={{ mb: 0.5 }}>Game Type</Typography>
             <Select
-              labelId="difficulty-label"
-              id="difficulty-select"
-              value={selectedDifficulty}
-              label="AI Difficulty"
-              onChange={handleDifficultyChange}
+              size="small"
+              value={selectedGameType}
+              onChange={handleGameTypeChange}
+              sx={{ height: '36px' }}
             >
-              <MenuItem value="beginner">Beginner</MenuItem>
-              <MenuItem value="intermediate">Intermediate</MenuItem>
-              <MenuItem value="advanced">Advanced</MenuItem>
-              <MenuItem value="master">Master</MenuItem>
+              <MenuItem value="vs-computer">Play vs Computer</MenuItem>
+              <MenuItem value="real-time">Real-time Multiplayer</MenuItem>
+              <MenuItem value="turn-based">Turn-based Multiplayer</MenuItem>
             </Select>
-          </FormControl>
-        )}
-      </Box>
-      
-      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          onClick={handleStartNewGame}
-        >
-          Start New Game
-        </Button>
+          </Box>
+          
+          {selectedGameType === 'vs-computer' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: '140px' }}>
+              <Typography variant="caption" sx={{ mb: 0.5 }}>AI Difficulty</Typography>
+              <Select
+                size="small"
+                value={selectedDifficulty}
+                onChange={handleDifficultyChange}
+                sx={{ height: '36px' }}
+              >
+                <MenuItem value="beginner">Beginner</MenuItem>
+                <MenuItem value="intermediate">Intermediate</MenuItem>
+                <MenuItem value="advanced">Advanced</MenuItem>
+                <MenuItem value="master">Master</MenuItem>
+              </Select>
+            </Box>
+          )}
+        </Box>
         
         {status === 'in-progress' && (
-          <Button 
-            variant="outlined" 
-            color="secondary" 
-            onClick={() => dispatch({ type: 'game/resignGame' })}
-          >
-            Resign Game
-          </Button>
+          <Box sx={{ mt: 1 }}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="small"
+              onClick={() => dispatch({ type: 'game/resignGame' })}
+            >
+              Resign Game
+            </Button>
+          </Box>
         )}
       </Box>
     </Paper>

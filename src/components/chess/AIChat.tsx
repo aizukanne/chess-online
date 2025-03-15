@@ -15,7 +15,7 @@ import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { useAppSelector, useAppDispatch } from '../../store';
 import { addChatMessage } from '../../store/gameSlice';
-import { generateAIChatResponse, isUsingGeminiAPI } from '../../services/ai/aiService';
+import { generateAIChatResponse } from '../../services/ai/aiService';
 
 const AIChat: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -53,12 +53,11 @@ const AIChat: React.FC = () => {
         console.log('AIChat: Current state:');
         console.log('- FEN:', fen);
         console.log('- AI Difficulty:', aiDifficulty || 'intermediate');
-        console.log('- isUsingGeminiAPI():', isUsingGeminiAPI());
         
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        console.log('AIChat: Calling generateAIChatResponse...');
+        console.log('AIChat: Calling AI for Kasparov response...');
         
         // Generate AI response
         const aiResponse = await generateAIChatResponse(
@@ -105,7 +104,7 @@ const AIChat: React.FC = () => {
     <Paper elevation={3} sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h6" sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)', display: 'flex', alignItems: 'center', gap: 1 }}>
         <SmartToyIcon color="primary" />
-        Chat with AI
+        Ask Kasparov
       </Typography>
       
       <Box sx={{ 
@@ -128,7 +127,7 @@ const AIChat: React.FC = () => {
       }}>
         {chatHistory.length === 0 ? (
           <Typography sx={{ color: 'text.secondary', textAlign: 'center', mt: 2 }}>
-            Start a conversation with the AI. Ask for advice or discuss your moves!
+            Start a conversation with Kasparov. Ask for advice or discuss your moves!
           </Typography>
         ) : (
           <List>
@@ -180,7 +179,7 @@ const AIChat: React.FC = () => {
         <TextField
           fullWidth
           variant="outlined"
-          placeholder="Ask the AI for advice..."
+          placeholder="Ask Kasparov about your moves or for advice..."
           size="small"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
