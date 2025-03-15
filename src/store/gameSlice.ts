@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Chess } from 'chess.js';
+import { Chess, Square } from 'chess.js';
 
 // Define types for our state
 export interface GameState {
@@ -46,13 +46,44 @@ export const gameSlice = createSlice({
       const chess = new Chess(state.fen);
       
       try {
+        // Check if this is a pawn promotion move
+        const piece = chess.get(from as Square);
+        const isPawnPromotion =
+          piece &&
+          piece.type === 'p' &&
+          ((piece.color === 'w' && to[1] === '8') ||
+           (piece.color === 'b' && to[1] === '1'));
+        
+        console.log(`makeMove - Is pawn promotion: ${isPawnPromotion}`);
+        
+        // If it's a promotion move, ensure we have a promotion piece
+        const movePromotion = isPawnPromotion ? (promotion || 'q') : promotion;
+        
         // Attempt to make the move
-        const move = chess.move({ from, to, promotion });
+        const move = chess.move({ from, to, promotion: movePromotion });
         
         if (move) {
+          console.log('makeMove - Move made:', move);
+          
           // Update state with new board position
           state.fen = chess.fen();
-          state.history = chess.history();
+          
+          // Debug: Log the history from chess.js
+          const moveHistory = chess.history();
+          console.log('makeMove - Chess.js history():', moveHistory);
+          
+          // The chess.js history() method returns the moves in Standard Algebraic Notation (SAN)
+          // But it only includes the moves made with that specific Chess instance
+          // Since we create a new Chess instance for each move, we need to maintain the history ourselves
+          
+          // Get the SAN notation of the move that was just made
+          const moveSAN = move.san;
+          console.log('makeMove - Move SAN notation:', moveSAN);
+          
+          // Append the new move to our history
+          state.history = [...state.history, moveSAN];
+          console.log('makeMove - Updated history:', state.history);
+          
           state.isCheck = chess.isCheck();
           state.isCheckmate = chess.isCheckmate();
           state.isDraw = chess.isDraw();
@@ -64,6 +95,8 @@ export const gameSlice = createSlice({
           } else if (state.isDraw) {
             state.status = 'draw';
           }
+        } else {
+          console.error('Move not made, but no error thrown');
         }
       } catch (error) {
         console.error('Invalid move:', error);
@@ -76,9 +109,17 @@ export const gameSlice = createSlice({
       whitePlayer?: string;
       blackPlayer?: string;
     }>) => {
+      console.log('startNewGame - Creating new game');
+      
       const chess = new Chess();
       state.fen = chess.fen();
+      
+      // Debug: Check the initial history
+      console.log('startNewGame - Initial chess.js history():', chess.history());
+      
       state.history = [];
+      console.log('startNewGame - Reset state history to empty array');
+      
       state.isCheck = false;
       state.isCheckmate = false;
       state.isDraw = false;

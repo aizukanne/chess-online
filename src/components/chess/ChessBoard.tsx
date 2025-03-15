@@ -22,13 +22,52 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   
   // Update the chess instance when fen changes
   React.useEffect(() => {
+    console.log('ChessBoard - Updating chess instance with FEN:', fen);
+    console.log('ChessBoard - Current history before load:', chess.history());
+    
+    // Load the new position
     chess.load(fen);
+    
+    console.log('ChessBoard - History after load:', chess.history());
   }, [fen, chess]);
 
+  // Handle promotion piece selection
+  const handlePromotionPieceSelect = (
+    piece: string | undefined,
+    sourceSquare: Square | undefined,
+    targetSquare: Square | undefined
+  ) => {
+    // If any parameter is undefined, return false
+    if (!piece || !sourceSquare || !targetSquare) {
+      console.error('ChessBoard - Promotion piece selection missing parameters');
+      return false;
+    }
+    
+    console.log(`ChessBoard - Promotion piece selected: ${piece}, from ${sourceSquare} to ${targetSquare}`);
+    
+    // Extract the promotion piece type (q, r, n, b) from the piece string (e.g., "wQ" -> "q")
+    const promotionPiece = piece.charAt(1).toLowerCase();
+    
+    // Create the move object with the selected promotion piece
+    const moveObj = {
+      from: sourceSquare,
+      to: targetSquare,
+      promotion: promotionPiece
+    };
+    
+    console.log('ChessBoard - Dispatching promotion move:', moveObj);
+    dispatch(makeMove(moveObj));
+    
+    return true;
+  };
+  
   // Handle piece movement
   const onDrop = (sourceSquare: Square, targetSquare: Square, piece: string): boolean => {
+    console.log(`ChessBoard - onDrop: from ${sourceSquare} to ${targetSquare}, piece: ${piece}`);
+    
     // Check if the game is over
     if (status !== 'in-progress') {
+      console.log('ChessBoard - Game is not in progress, ignoring move');
       return false;
     }
     
@@ -39,18 +78,25 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         ((piece[0] === 'w' && targetSquare[1] === '8') ||
          (piece[0] === 'b' && targetSquare[1] === '1'));
       
-      // Create the move object
-      const moveObj = {
-        from: sourceSquare,
-        to: targetSquare,
-        // If it's a promotion move, the promotion piece will be selected from the UI
-        // The piece parameter from onDrop will contain the selected promotion piece when a promotion occurs
-        promotion: isPawnPromotion ? piece[1].toLowerCase() : undefined
-      };
+      console.log(`ChessBoard - Is pawn promotion: ${isPawnPromotion}`);
       
-      // Dispatch the move action
-      dispatch(makeMove(moveObj));
+      // For non-promotion moves, dispatch immediately
+      if (!isPawnPromotion) {
+        const moveObj = {
+          from: sourceSquare,
+          to: targetSquare,
+          promotion: undefined
+        };
+        
+        console.log('ChessBoard - Dispatching non-promotion move:', moveObj);
+        dispatch(makeMove(moveObj));
+        return true;
+      }
       
+      // For promotion moves, the react-chessboard library will show a promotion dialog
+      // The selected piece will be passed to onPieceDrop in a subsequent call
+      // We don't need to do anything special here, just return true to allow the promotion dialog
+      console.log('ChessBoard - Allowing promotion dialog to show');
       return true;
     } catch (error) {
       console.error('Move error:', error);
@@ -115,6 +161,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         areArrowsAllowed={true}
         showBoardNotation={showNotation}
         boardWidth={width}
+        // Allow user to select promotion piece
+        onPromotionPieceSelect={handlePromotionPieceSelect}
       />
       
       <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>

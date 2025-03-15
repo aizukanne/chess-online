@@ -130,6 +130,49 @@ const getCorsHeaders = (origin) => {
     'Content-Type': 'application/json; charset=utf-8'
   };
 };
+/**
+ * Basic validation for a chess move format
+ * @param {string} moveText - The move text in the format "e2e4" or "e7e8q"
+ * @returns {boolean} - True if the move format is valid, false otherwise
+ */
+const validateMoveFormat = (moveText) => {
+  try {
+    // Check if the move text has the correct length
+    if (moveText.length < 4 || moveText.length > 5) {
+      console.log(`Invalid move format length: ${moveText}`);
+      return false;
+    }
+    
+    // Parse the move text
+    const from = moveText.substring(0, 2);
+    const to = moveText.substring(2, 4);
+    const promotion = moveText.length > 4 ? moveText.substring(4, 5) : undefined;
+    
+    // Check if the from and to squares are valid chess squares
+    const isValidSquare = (square) => {
+      return square.length === 2 &&
+             'abcdefgh'.includes(square[0]) &&
+             '12345678'.includes(square[1]);
+    };
+    
+    if (!isValidSquare(from) || !isValidSquare(to)) {
+      console.log(`Invalid square in move: ${moveText}`);
+      return false;
+    }
+    
+    // Check if the promotion piece is valid (if present)
+    if (promotion && !'qrbnQRBN'.includes(promotion)) {
+      console.log(`Invalid promotion piece: ${promotion}`);
+      return false;
+    }
+    
+    console.log(`Move format is valid: ${moveText}`);
+    return true;
+  } catch (error) {
+    console.error(`Error validating move format: ${error.message}`);
+    return false;
+  }
+};
 
 /**
  * Lambda handler function
@@ -193,6 +236,63 @@ export const handler = async (event, context) => {
       
       // Call the Gemini API
       const response = await callGeminiAPI(prompt, temperature);
+      
+      // For move requests, validate the move format before returning
+      if (requestType === 'move') {
+        const moveText = response.trim();
+        console.log(`Validating move format: ${moveText}`);
+        
+        const isValidFormat = validateMoveFormat(moveText);
+        
+        if (!isValidFormat) {
+          console.log(`Invalid move format returned by Gemini: ${moveText}`);
+          
+          // Try to get a valid move by retrying with a more explicit prompt
+          const retryPrompt = `
+${prompt}
+
+CRITICAL: Your previous move "${moveText}" was invalid. Please provide a move in the correct format.
+The format should be exactly like "e2e4" (from square to square).
+For pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
+
+Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
+`;
+          
+          console.log('Retrying with more explicit prompt');
+          const retryResponse = await callGeminiAPI(retryPrompt, temperature);
+          const retryMoveText = retryResponse.trim();
+          
+          const retryIsValidFormat = validateMoveFormat(retryMoveText);
+          
+          if (!retryIsValidFormat) {
+            console.log(`Retry also produced invalid move format: ${retryMoveText}`);
+            
+            // Return an error indicating the move format was invalid
+            return {
+              statusCode: 400,
+              headers: corsHeaders,
+              body: JSON.stringify({
+                error: `Invalid move format: ${moveText}. Retry also invalid: ${retryMoveText}`,
+                success: false
+              })
+            };
+          }
+          
+          console.log(`Retry produced valid move format: ${retryMoveText}`);
+          
+          // Return the valid move from the retry
+          return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({
+              content: retryMoveText,
+              success: true
+            })
+          };
+        }
+        
+        console.log(`Move format validated successfully: ${moveText}`);
+      }
       
       // Return the response
       return {
