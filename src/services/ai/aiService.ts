@@ -441,12 +441,13 @@ export const generateAIAnalysis = async (
 export const generateAIChatResponse = async (
   fen: string,
   message: string,
-  difficulty: AIDifficulty = 'intermediate'
+  difficulty: AIDifficulty = 'intermediate',
+  chatHistory: Array<{ sender: string; message: string; timestamp: number }> = []
 ): Promise<string> => {
   // Always try to use Gemini API for chat responses first
   try {
     console.log('Attempting to use Gemini API for chat response');
-    return await geminiBackendService.getChatResponse(fen, message, difficulty);
+    return await geminiBackendService.getChatResponse(fen, message, difficulty, chatHistory);
   } catch (error) {
     console.error('Failed to get chat response from Gemini API, falling back to local implementation:', error);
     // Fall back to local implementation

@@ -55,16 +55,20 @@ const GameHistory: React.FC<GameHistoryProps> = ({ maxHeight = 400 }) => {
   };
 
   return (
-    <Paper elevation={3} sx={{ width: '100%', mb: 2 }}>
+    <Paper elevation={3} sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h6" sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
         Move History
       </Typography>
       
-      <Box sx={{ 
-        maxHeight, 
+      <Box sx={{
+        flexGrow: 1,
         overflow: 'auto',
+        overflowY: 'scroll !important', // Always show vertical scrollbar
+        minHeight: '200px', // Ensure minimum height for content
+        ...(maxHeight !== 'none' ? { maxHeight } : {}),
         '&::-webkit-scrollbar': {
-          width: '8px',
+          width: '10px',
+          display: 'block !important'
         },
         '&::-webkit-scrollbar-track': {
           background: '#f1f1f1',
@@ -76,6 +80,9 @@ const GameHistory: React.FC<GameHistoryProps> = ({ maxHeight = 400 }) => {
         '&::-webkit-scrollbar-thumb:hover': {
           background: '#555',
         },
+        // Firefox scrollbar
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#888 #f1f1f1',
       }}>
         {history.length === 0 ? (
           <Typography sx={{ p: 2, color: 'text.secondary' }}>

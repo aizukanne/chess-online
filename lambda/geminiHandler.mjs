@@ -1,27 +1,42 @@
 import https from 'https';
+import fs from 'fs';
+import path from 'path';
 
 // Gemini API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-// CORS configuration
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:3000', 'https://chess-online.example.com'];
+// Log file configuration
+const LOG_DIR = process.env.LOG_DIR || '/tmp/chess-online-logs';
+const LOG_FILE = path.join(LOG_DIR, 'gemini-api.log');
 
-// Enable debug logging
-const DEBUG = process.env.DEBUG === 'true' || true;
+// Ensure log directory exists
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+}
 
 /**
- * Log a message with timestamp
+ * Log a message to the log file
  * @param {string} message - The message to log
  */
 const logMessage = (message) => {
-  if (DEBUG) {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${message}`);
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${message}\n`;
+  
+  try {
+    fs.appendFileSync(LOG_FILE, logEntry);
+  } catch (error) {
+    console.error('Error writing to log file:', error);
   }
 };
+
+// CORS configuration
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://code-server.home:3000', 'http://code-server.home:3000/game'];
+
+// Enable debug logging
+const DEBUG = process.env.DEBUG === 'true' || true;
 
 /**
  * Make a request to the Gemini API
@@ -31,16 +46,29 @@ const logMessage = (message) => {
  */
 const callGeminiAPI = (prompt, temperature = 0.7) => {
   return new Promise((resolve, reject) => {
-    // Log the request
-    console.log(`REQUEST:\nPrompt: ${prompt.substring(0, 100)}...\nTemperature: ${temperature}`);
+    // Log the request (truncate long prompts for readability)
+    const truncatedPrompt = prompt.length > 500 ? prompt.substring(0, 500) + '... [truncated]' : prompt;
+    console.log(`REQUEST PROMPT (truncated):\n${truncatedPrompt}\nTemperature: ${temperature}`);
+    logMessage(`REQUEST PROMPT (truncated):\n${truncatedPrompt}\nTemperature: ${temperature}`);
+    
+    // Save full prompt to a separate log file for debugging
+    try {
+      const fullPromptLogFile = path.join(LOG_DIR, 'full-prompts.log');
+      fs.appendFileSync(fullPromptLogFile, `\n\n[${new Date().toISOString()}] FULL PROMPT:\n${prompt}\n`);
+    } catch (error) {
+      console.error('Error writing full prompt to log file:', error);
+    }
     
     // Prepare the request data
-    const requestData = JSON.stringify({
+    // Sanitize the prompt to ensure it doesn't contain invalid JSON characters
+    const sanitizedPrompt = prompt.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+    
+    const requestObject = {
       contents: [
         {
           parts: [
             {
-              text: prompt
+              text: sanitizedPrompt
             }
           ]
         }
@@ -51,7 +79,12 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
         topK: 40,
         maxOutputTokens: 1024
       }
-    });
+    };
+    
+    // Log the full request object
+    logMessage(`REQUEST OBJECT: ${JSON.stringify(requestObject, null, 2)}`);
+    
+    const requestData = JSON.stringify(requestObject);
     
     // Prepare the request options
     const options = {
@@ -71,15 +104,22 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       });
       
       res.on('end', () => {
-        // Log the response status
-        console.log(`RESPONSE:\nStatus: ${res.statusCode}`);
+        // Log a truncated version for console
+        console.log(`Response status: ${res.statusCode}`);
+        const truncatedResponse = responseData.length > 200
+          ? responseData.substring(0, 200) + '...'
+          : responseData;
+        console.log(`Response data (truncated): ${truncatedResponse}`);
         
-        // Log a truncated version of the response data to avoid cluttering logs
-        if (DEBUG) {
-          const truncatedResponse = responseData.length > 200
-            ? responseData.substring(0, 200) + '...'
-            : responseData;
-          console.log(`Response data: ${truncatedResponse}`);
+        // Log the full response to the log file
+        logMessage(`RESPONSE:\nStatus: ${res.statusCode}\nData: ${responseData}`);
+        
+        // Save full response to a separate log file for debugging
+        try {
+          const fullResponseLogFile = path.join(LOG_DIR, 'full-responses.log');
+          fs.appendFileSync(fullResponseLogFile, `\n\n[${new Date().toISOString()}] FULL RESPONSE:\nStatus: ${res.statusCode}\n${responseData}\n`);
+        } catch (error) {
+          console.error('Error writing full response to log file:', error);
         }
         
         if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -89,19 +129,33 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
               const text = parsedResponse.candidates[0].content.parts[0].text;
               resolve(text);
             } else {
+              logMessage(`ERROR: No candidates in response: ${responseData}`);
               reject(new Error('No candidates in response'));
             }
           } catch (error) {
+            logMessage(`ERROR: JSON parsing error: ${error.message}\nResponse: ${responseData}`);
             reject(error);
           }
         } else {
+          logMessage(`ERROR: API request failed with status ${res.statusCode}: ${responseData}`);
           reject(new Error(`API request failed with status ${res.statusCode}: ${responseData}`));
         }
       });
     });
     
     req.on('error', (error) => {
-      console.error(`ERROR: ${error.message}`);
+      // Log detailed error information
+      console.error('Request error:', error);
+      logMessage(`ERROR DETAILS:\nMessage: ${error.message}\nStack: ${error.stack}\nCode: ${error.code || 'N/A'}`);
+      
+      // Save error to a separate log file for debugging
+      try {
+        const errorLogFile = path.join(LOG_DIR, 'error.log');
+        fs.appendFileSync(errorLogFile, `\n\n[${new Date().toISOString()}] REQUEST ERROR:\n${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}\n`);
+      } catch (logError) {
+        console.error('Error writing to error log file:', logError);
+      }
+      
       reject(error);
     });
     
@@ -225,13 +279,25 @@ export const handler = async (event, context) => {
     try {
       // Parse the request body
       const body = JSON.parse(event.body);
-      const { prompt, temperature, difficulty, requestType, fen, message } = body;
+      const { prompt, temperature, difficulty, requestType, fen, message, chatHistory } = body;
       
-      // Log the request details
+      // Log the request details with full information
+      logMessage(`REQUEST DETAILS:
+Type: ${requestType}
+Difficulty: ${difficulty}
+FEN: ${fen}
+Message: ${message || 'N/A'}
+Chat History: ${chatHistory ? JSON.stringify(chatHistory, null, 2) : 'None'}`);
+
+      // Log the full request body for debugging
+      logMessage(`FULL REQUEST BODY: ${JSON.stringify(body, null, 2)}`);
+      
+      // Log truncated details to console
       console.log(`REQUEST DETAILS: Type: ${requestType}, Difficulty: ${difficulty}`);
       if (DEBUG) {
         console.log(`FEN: ${fen}`);
         console.log(`Message: ${message || 'N/A'}`);
+        console.log(`Chat History: ${chatHistory ? chatHistory.length + ' messages' : 'None'}`);
       }
       
       // Call the Gemini API
@@ -304,15 +370,29 @@ Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
         })
       };
     } catch (error) {
-      // Log the error
-      console.error(`ERROR: ${error.message}`);
+      // Log detailed error information
+      console.error('Lambda handler error:', error);
+      logMessage(`LAMBDA ERROR DETAILS:\nMessage: ${error.message}\nStack: ${error.stack}\nCode: ${error.code || 'N/A'}`);
       
-      // Return the error
+      // Save error to a separate log file for debugging
+      try {
+        const errorLogFile = path.join(LOG_DIR, 'lambda-errors.log');
+        fs.appendFileSync(errorLogFile, `\n\n[${new Date().toISOString()}] LAMBDA ERROR:\n${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}\n`);
+      } catch (logError) {
+        console.error('Error writing to lambda error log file:', logError);
+      }
+      
+      // Return the error with detailed information
       return {
         statusCode: 500,
         headers: corsHeaders,
         body: JSON.stringify({
           error: error.message,
+          errorDetails: {
+            stack: error.stack,
+            code: error.code || 'N/A',
+            name: error.name || 'Error'
+          },
           success: false
         })
       };

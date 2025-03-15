@@ -66,17 +66,21 @@ const ChatBox: React.FC<ChatBoxProps> = ({ maxHeight = 300 }) => {
   };
 
   return (
-    <Paper elevation={3} sx={{ width: '100%' }}>
+    <Paper elevation={3} sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h6" sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
-        Chat
+        Player Chat
       </Typography>
       
-      <Box sx={{ 
-        height: maxHeight, 
+      <Box sx={{
+        flexGrow: 1,
         overflow: 'auto',
+        overflowY: 'scroll !important', // Always show vertical scrollbar
         p: 2,
+        minHeight: '200px', // Ensure minimum height for content
+        ...(maxHeight !== 'none' ? { height: maxHeight } : {}),
         '&::-webkit-scrollbar': {
-          width: '8px',
+          width: '10px',
+          display: 'block !important'
         },
         '&::-webkit-scrollbar-track': {
           background: '#f1f1f1',
@@ -88,6 +92,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({ maxHeight = 300 }) => {
         '&::-webkit-scrollbar-thumb:hover': {
           background: '#555',
         },
+        // Firefox scrollbar
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#888 #f1f1f1',
       }}>
         {chatHistory.length === 0 ? (
           <Typography sx={{ color: 'text.secondary', textAlign: 'center', mt: 2 }}>

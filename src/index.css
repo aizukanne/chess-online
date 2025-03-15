@@ -41,3 +41,33 @@ a {
 .highlight-piece {
   animation: piece-highlight 1s ease-in-out;
 }
+
+/* Global scrollbar styles */
+::-webkit-scrollbar {
+  width: 10px;
+  display: block !important;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #888 #f1f1f1;
+}
+
+/* Force scrollbars to be visible */
+.MuiBox-root {
+  overflow-y: auto !important;
+}

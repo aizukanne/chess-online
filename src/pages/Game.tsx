@@ -24,9 +24,10 @@ interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
   value: number;
+  sx?: any;
 }
 
-const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other }) => {
+const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, sx, ...other }) => {
   return (
     <div
       role="tabpanel"
@@ -36,7 +37,14 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index, ...other })
       {...other}
     >
       {value === index && (
-        <Box sx={{ pt: 2 }}>
+        <Box sx={{
+          pt: 2,
+          height: '100%',
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          ...(sx || {})
+        }}>
           {children}
         </Box>
       )}
@@ -209,8 +217,17 @@ const Game: React.FC = () => {
         
         {/* History & Chat */}
         <Grid item xs={12} md={4}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
-            <Paper elevation={1} sx={{ width: '100%' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Paper
+              elevation={1}
+              sx={{
+                width: '100%',
+                height: { xs: '400px', md: '600px' }, // Match chess board height on desktop, min height on mobile
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden' // Ensure content doesn't overflow
+              }}
+            >
               <Tabs
                 value={tabValue}
                 onChange={handleTabChange}
@@ -223,19 +240,45 @@ const Game: React.FC = () => {
                 {gameType !== 'vs-computer' && <Tab label="Player Chat" />}
               </Tabs>
               
-              <TabPanel value={tabValue} index={0}>
-                <GameHistory maxHeight={300} />
-              </TabPanel>
-              
-              <TabPanel value={tabValue} index={1}>
-                <AIChat />
-              </TabPanel>
-              
-              {gameType !== 'vs-computer' && (
-                <TabPanel value={tabValue} index={2}>
-                  <ChatBox maxHeight={300} />
+              <Box sx={{
+                flexGrow: 1,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100% - 48px)', // Subtract the height of the tabs
+                '& > div': {
+                  height: '100%',
+                  overflow: 'auto !important',
+                  '&::-webkit-scrollbar': {
+                    width: '10px',
+                    display: 'block'
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    background: '#f1f1f1',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    background: '#888',
+                    borderRadius: '4px',
+                  },
+                  '&::-webkit-scrollbar-thumb:hover': {
+                    background: '#555',
+                  }
+                }
+              }}>
+                <TabPanel value={tabValue} index={0} sx={{ height: '100%', overflow: 'auto' }}>
+                  <GameHistory maxHeight="none" />
                 </TabPanel>
-              )}
+                
+                <TabPanel value={tabValue} index={1} sx={{ height: '100%', overflow: 'auto' }}>
+                  <AIChat />
+                </TabPanel>
+                
+                {gameType !== 'vs-computer' && (
+                  <TabPanel value={tabValue} index={2} sx={{ height: '100%', overflow: 'auto' }}>
+                    <ChatBox maxHeight="none" />
+                  </TabPanel>
+                )}
+              </Box>
             </Paper>
           </Box>
         </Grid>
