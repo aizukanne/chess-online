@@ -60,8 +60,15 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
     }
     
     // Prepare the request data
-    // Sanitize the prompt to ensure it doesn't contain invalid JSON characters
-    const sanitizedPrompt = prompt.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+    // More aggressive sanitization to ensure it doesn't contain any characters that could break JSON
+    const sanitizedPrompt = prompt
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+      .replace(/\\(?!["\\/bfnrt])/g, '\\\\') // Escape backslashes not followed by valid escape chars
+      .replace(/"/g, '\\"') // Escape double quotes
+      .replace(/\n/g, '\\n') // Replace newlines with escaped newlines
+      .replace(/\r/g, '\\r') // Replace carriage returns with escaped carriage returns
+      .replace(/\t/g, '\\t') // Replace tabs with escaped tabs
+      .replace(/[\u2028\u2029]/g, ''); // Remove line/paragraph separators
     
     const requestObject = {
       contents: [
@@ -81,10 +88,34 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       }
     };
     
-    // Log the full request object
-    logMessage(`REQUEST OBJECT: ${JSON.stringify(requestObject, null, 2)}`);
+    // Create the JSON string that will be sent to Gemini API
+    let requestData = JSON.stringify(requestObject);
     
-    const requestData = JSON.stringify(requestObject);
+    // Validate the JSON string to ensure it's valid
+    try {
+      // Try to parse the JSON string to ensure it's valid
+      JSON.parse(requestData);
+      logMessage(`JSON VALIDATION: Valid JSON`);
+    } catch (error) {
+      // If the JSON is invalid, log the error and create a simplified request
+      logMessage(`JSON VALIDATION ERROR: ${error.message}`);
+      console.error(`Invalid JSON detected: ${error.message}`);
+      
+      // Create a simplified request with minimal content
+      const fallbackRequest = JSON.stringify({
+        contents: [{ parts: [{ text: "Please provide a chess move or analysis" }] }],
+        generationConfig: { temperature, maxOutputTokens: 1024 }
+      });
+      
+      logMessage(`USING FALLBACK REQUEST: ${fallbackRequest}`);
+      requestData = fallbackRequest;
+    }
+    
+    // Log the exact JSON string that will be sent to Gemini API (no formatting, no truncation)
+    logMessage(`EXACT REQUEST JSON: ${requestData}`);
+    
+    // Also log the raw request object for debugging
+    logMessage(`RAW REQUEST OBJECT: ${JSON.stringify(requestObject)}`);
     
     // Prepare the request options
     const options = {
@@ -104,22 +135,19 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       });
       
       res.on('end', () => {
-        // Log a truncated version for console
+        // Log the complete response without truncation
         console.log(`Response status: ${res.statusCode}`);
-        const truncatedResponse = responseData.length > 200
-          ? responseData.substring(0, 200) + '...'
-          : responseData;
-        console.log(`Response data (truncated): ${truncatedResponse}`);
+        console.log(`COMPLETE RESPONSE DATA: ${responseData}`);
         
-        // Log the full response to the log file
-        logMessage(`RESPONSE:\nStatus: ${res.statusCode}\nData: ${responseData}`);
+        // Log the exact response to the log file
+        logMessage(`EXACT RESPONSE:\nStatus: ${res.statusCode}\nData: ${responseData}`);
         
-        // Save full response to a separate log file for debugging
+        // Save raw response to a separate log file for debugging
         try {
-          const fullResponseLogFile = path.join(LOG_DIR, 'full-responses.log');
-          fs.appendFileSync(fullResponseLogFile, `\n\n[${new Date().toISOString()}] FULL RESPONSE:\nStatus: ${res.statusCode}\n${responseData}\n`);
+          const rawResponseLogFile = path.join(LOG_DIR, 'raw-responses.log');
+          fs.appendFileSync(rawResponseLogFile, `\n\n[${new Date().toISOString()}] RAW RESPONSE:\nStatus: ${res.statusCode}\n${responseData}\n`);
         } catch (error) {
-          console.error('Error writing full response to log file:', error);
+          console.error('Error writing raw response to log file:', error);
         }
         
         if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -281,24 +309,16 @@ export const handler = async (event, context) => {
       const body = JSON.parse(event.body);
       const { prompt, temperature, difficulty, requestType, fen, message, chatHistory } = body;
       
-      // Log the request details with full information
-      logMessage(`REQUEST DETAILS:
-Type: ${requestType}
-Difficulty: ${difficulty}
-FEN: ${fen}
-Message: ${message || 'N/A'}
-Chat History: ${chatHistory ? JSON.stringify(chatHistory, null, 2) : 'None'}`);
-
-      // Log the full request body for debugging
-      logMessage(`FULL REQUEST BODY: ${JSON.stringify(body, null, 2)}`);
+      // Log the exact request body without any formatting or truncation
+      console.log(`EXACT REQUEST BODY: ${event.body}`);
+      logMessage(`EXACT REQUEST BODY: ${event.body}`);
       
-      // Log truncated details to console
-      console.log(`REQUEST DETAILS: Type: ${requestType}, Difficulty: ${difficulty}`);
-      if (DEBUG) {
-        console.log(`FEN: ${fen}`);
-        console.log(`Message: ${message || 'N/A'}`);
-        console.log(`Chat History: ${chatHistory ? chatHistory.length + ' messages' : 'None'}`);
-      }
+      // Log the parsed body as raw JSON string
+      const rawBodyString = JSON.stringify(body);
+      logMessage(`RAW PARSED BODY: ${rawBodyString}`);
+      
+      // Log basic request details to console
+      console.log(`REQUEST TYPE: ${requestType}, DIFFICULTY: ${difficulty}`);
       
       // Call the Gemini API
       const response = await callGeminiAPI(prompt, temperature);

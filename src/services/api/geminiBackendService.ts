@@ -284,15 +284,47 @@ export const getChatResponse = async (
   // Sanitize messages to prevent JSON issues
   const sanitizeMessage = (text: string): string => {
     if (!text) return '';
-    // Remove control characters and other problematic characters
-    return text.replace(/[\u0000-\u001F\u007F-\u009F"\\]/g, '');
+    
+    // More aggressive sanitization to ensure it doesn't contain any characters that could break JSON
+    return text
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+      .replace(/\\(?!["\\/bfnrt])/g, '\\\\') // Escape backslashes not followed by valid escape chars
+      .replace(/"/g, '\\"') // Escape double quotes
+      .replace(/\n/g, ' ') // Replace newlines with spaces
+      .replace(/\r/g, ' ') // Replace carriage returns with spaces
+      .replace(/\t/g, ' ') // Replace tabs with spaces
+      .replace(/[\u2028\u2029]/g, ''); // Remove line/paragraph separators
   };
   
-  const formattedChatHistory = chatHistory.length > 0
-    ? `\nConversation history:\n${chatHistory.map(chat =>
-        `${chat.sender === 'AI' ? 'Kasparov' : 'Player'}: ${sanitizeMessage(chat.message)}`
-      ).join('\n')}\n`
-    : '';
+  // Format chat history in a more robust way
+  let formattedChatHistory = '';
+  
+  if (chatHistory && chatHistory.length > 0) {
+    try {
+      // Build history string with explicit try/catch for each message
+      const historyLines = [];
+      
+      for (let i = 0; i < chatHistory.length; i++) {
+        try {
+          const chat = chatHistory[i];
+          if (chat && typeof chat === 'object') {
+            const sender = chat.sender === 'AI' ? 'Kasparov' : 'Player';
+            const message = chat.message ? sanitizeMessage(chat.message) : '[empty message]';
+            historyLines.push(`${sender}: ${message}`);
+          }
+        } catch (error) {
+          console.error('Error processing chat history item:', error);
+        }
+      }
+      
+      if (historyLines.length > 0) {
+        formattedChatHistory = `\nConversation history:\n${historyLines.join('\n')}\n`;
+      }
+    } catch (error) {
+      console.error('Error formatting chat history:', error);
+      formattedChatHistory = ''; // Reset to empty if there's an error
+    }
+  }
 
   // Create a prompt for the Gemini API
   const prompt = `
