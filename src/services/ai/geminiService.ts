@@ -1,4 +1,5 @@
 import { AIDifficulty } from './aiService';
+import { Chess } from 'chess.js';
 
 // Interface for Gemini API request
 interface GeminiRequest {
@@ -104,6 +105,12 @@ export class GeminiService {
 
     const temperature = temperatureMap[difficulty];
 
+    // Create a chess instance to check if the king is in check
+    const chess = new Chess(fen);
+    const isCheck = chess.isCheck();
+    const isCheckmate = chess.isCheckmate();
+    const turn = chess.turn();
+    
     // Create a prompt for the Gemini API
     let prompt = `
 You are a chess engine assistant. Analyze the following chess position in FEN notation and suggest the best move.
@@ -111,6 +118,9 @@ You are a chess engine assistant. Analyze the following chess position in FEN no
 FEN: ${fen}
 
 Difficulty level: ${difficulty}
+Current turn: ${turn === 'w' ? 'White' : 'Black'}
+Check status: ${isCheck ? 'The king is IN CHECK' : 'The king is not in check'}
+Checkmate status: ${isCheckmate ? 'CHECKMATE' : 'Not checkmate'}
 
 Rules:
 1. First, provide a brief explanation of your move in clear English (1-2 sentences).
@@ -118,14 +128,16 @@ Rules:
 3. DO NOT use algebraic notation like "Nxf3+" or "Qd8". Always use the exact square-to-square format.
 4. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
 5. The move must be legal according to chess rules.
-6. For beginner difficulty, you can make suboptimal but reasonable moves.
-7. For master difficulty, provide the strongest move you can find.
-8. Format your response as: "Explanation: [your explanation]. Move: [from-square][to-square]"
+6. ${isCheck ? 'IMPORTANT: The king is in check! You MUST address the check with your move.' : ''}
+7. For beginner difficulty, you can make suboptimal but reasonable moves.
+8. For master difficulty, provide the strongest move you can find.
+9. Format your response as: "Explanation: [your explanation]. Move: [from-square][to-square]"
 
 Example response:
 "Explanation: I'm developing my knight to a good square with tempo. Move: g1f3"
 
 IMPORTANT: Always use the exact square-to-square format (like "g1f3"), never use algebraic notation (like "Nf3").
+${isCheck ? 'CRITICAL: Your king is in check! You MUST make a move that addresses the check. This can be done by: 1) Moving the king, 2) Capturing the checking piece, or 3) Blocking the check.' : ''}
 `;
 
     // If this is a retry, add feedback about the previous error

@@ -22,31 +22,84 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   
   // Update the chess instance when fen changes
   React.useEffect(() => {
+    console.log('ChessBoard - Updating chess instance with FEN:', fen);
+    console.log('ChessBoard - Current history before load:', chess.history());
+    
+    // Load the new position
     chess.load(fen);
+    
+    console.log('ChessBoard - History after load:', chess.history());
   }, [fen, chess]);
 
   // Handle piece movement
   const onDrop = (sourceSquare: Square, targetSquare: Square, piece: string): boolean => {
+    console.log(`ChessBoard - onDrop: from ${sourceSquare} to ${targetSquare}, piece: ${piece}`);
+    
     // Check if the game is over
     if (status !== 'in-progress') {
+      console.log('ChessBoard - Game is not in progress, ignoring move');
       return false;
     }
     
     try {
+      // Create a temporary chess instance to validate the move
+      const tempChess = new Chess(fen);
+      
       // Check if this is a pawn promotion move
       const isPawnPromotion =
         piece[1].toLowerCase() === 'p' &&
         ((piece[0] === 'w' && targetSquare[1] === '8') ||
          (piece[0] === 'b' && targetSquare[1] === '1'));
       
+      console.log(`ChessBoard - Is pawn promotion: ${isPawnPromotion}`);
+      
+      // For pawn promotion, we need to validate the move first
+      if (isPawnPromotion) {
+        // Try the move with queen promotion (default)
+        try {
+          const result = tempChess.move({
+            from: sourceSquare,
+            to: targetSquare,
+            promotion: 'q' // Default to queen for validation
+          });
+          
+          if (!result) {
+            console.error('ChessBoard - Invalid promotion move');
+            return false;
+          }
+          
+          console.log('ChessBoard - Promotion move is valid, promoting to queen');
+        } catch (validationError) {
+          console.error('ChessBoard - Promotion move validation error:', validationError);
+          return false;
+        }
+      } else {
+        // For non-promotion moves, validate the move
+        try {
+          const result = tempChess.move({
+            from: sourceSquare,
+            to: targetSquare
+          });
+          
+          if (!result) {
+            console.error('ChessBoard - Invalid move');
+            return false;
+          }
+        } catch (validationError) {
+          console.error('ChessBoard - Move validation error:', validationError);
+          return false;
+        }
+      }
+      
       // Create the move object
       const moveObj = {
         from: sourceSquare,
         to: targetSquare,
-        // If it's a promotion move, the promotion piece will be selected from the UI
-        // The piece parameter from onDrop will contain the selected promotion piece when a promotion occurs
-        promotion: isPawnPromotion ? piece[1].toLowerCase() : undefined
+        // For promotion, we'll default to queen if it's a pawn promotion move
+        promotion: isPawnPromotion ? 'q' : undefined
       };
+      
+      console.log('ChessBoard - Dispatching move:', moveObj);
       
       // Dispatch the move action
       dispatch(makeMove(moveObj));

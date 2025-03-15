@@ -1,4 +1,5 @@
 import https from 'https';
+import { Chess } from 'chess.js';
 
 // Gemini API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -130,6 +131,55 @@ const getCorsHeaders = (origin) => {
     'Content-Type': 'application/json; charset=utf-8'
   };
 };
+/**
+ * Validate a chess move
+ * @param {string} fen - The FEN string representing the current position
+ * @param {string} moveText - The move text in the format "e2e4" or "e7e8q"
+ * @returns {boolean|Object} - False if the move is invalid, or the move object if valid
+ */
+const validateMove = (fen, moveText) => {
+  try {
+    // Create a chess instance with the current position
+    const chess = new Chess(fen);
+    
+    // Check if the king is in check
+    const isCheck = chess.isCheck();
+    
+    // Parse the move text
+    if (moveText.length < 4) {
+      console.log(`Invalid move format: ${moveText}`);
+      return false;
+    }
+    
+    const from = moveText.substring(0, 2);
+    const to = moveText.substring(2, 4);
+    const promotion = moveText.length > 4 ? moveText.substring(4, 5) : undefined;
+    
+    // Try to make the move
+    const move = chess.move({ from, to, promotion });
+    
+    if (!move) {
+      console.log(`Invalid move: ${moveText}`);
+      return false;
+    }
+    
+    // If the king was in check, verify that the move addresses the check
+    if (isCheck) {
+      // After making the move, the king should no longer be in check
+      // Since we've already made the move, we just need to verify that the game is still ongoing
+      if (chess.isCheckmate() || chess.isDraw()) {
+        console.log(`Move doesn't address check properly: ${moveText}`);
+        return false;
+      }
+    }
+    
+    console.log(`Valid move: ${moveText}`);
+    return move;
+  } catch (error) {
+    console.error(`Error validating move: ${error.message}`);
+    return false;
+  }
+};
 
 /**
  * Lambda handler function
@@ -193,6 +243,65 @@ export const handler = async (event, context) => {
       
       // Call the Gemini API
       const response = await callGeminiAPI(prompt, temperature);
+      
+      // For move requests, validate the move before returning
+      if (requestType === 'move' && fen) {
+        const moveText = response.trim();
+        console.log(`Validating move: ${moveText} for position: ${fen}`);
+        
+        const validMove = validateMove(fen, moveText);
+        
+        if (!validMove) {
+          console.log(`Invalid move returned by Gemini: ${moveText}`);
+          
+          // Try to get a valid move by retrying with a more explicit prompt
+          const retryPrompt = `
+${prompt}
+
+CRITICAL: Your previous move "${moveText}" was invalid. Please analyze the position again and provide a LEGAL move.
+Remember that if the king is in check, you MUST address the check by:
+1. Moving the king to a safe square
+2. Capturing the checking piece
+3. Blocking the check with another piece
+
+Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
+`;
+          
+          console.log('Retrying with more explicit prompt');
+          const retryResponse = await callGeminiAPI(retryPrompt, temperature);
+          const retryMoveText = retryResponse.trim();
+          
+          const retryValidMove = validateMove(fen, retryMoveText);
+          
+          if (!retryValidMove) {
+            console.log(`Retry also produced invalid move: ${retryMoveText}`);
+            
+            // Return an error indicating the move was invalid
+            return {
+              statusCode: 400,
+              headers: corsHeaders,
+              body: JSON.stringify({
+                error: `Invalid move: ${moveText}. Retry also invalid: ${retryMoveText}`,
+                success: false
+              })
+            };
+          }
+          
+          console.log(`Retry produced valid move: ${retryMoveText}`);
+          
+          // Return the valid move from the retry
+          return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({
+              content: retryMoveText,
+              success: true
+            })
+          };
+        }
+        
+        console.log(`Move validated successfully: ${moveText}`);
+      }
       
       // Return the response
       return {

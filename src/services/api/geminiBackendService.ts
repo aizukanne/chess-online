@@ -1,4 +1,5 @@
 import { AIDifficulty } from '../ai/aiService';
+import { Chess } from 'chess.js';
 
 /**
  * Backend service for handling Gemini API requests
@@ -112,21 +113,33 @@ export const getBestMove = async (
   const temperature = temperatureMap[difficulty];
 
   // Create a prompt for the Gemini API
+  // Use Chess.js to properly analyze the position
+  const chess = new Chess(fen);
+  const isCheck = chess.isCheck();
+  const isCheckmate = chess.isCheckmate();
+  const turn = chess.turn();
+  
   const prompt = `
 You are a chess engine assistant. Analyze the following chess position in FEN notation and suggest the best move.
 
 FEN: ${fen}
 
 Difficulty level: ${difficulty}
+Current turn: ${turn === 'w' ? 'White' : 'Black'}
+Check status: ${isCheck ? 'The king is IN CHECK' : 'The king is not in check'}
+Checkmate status: ${isCheckmate ? 'CHECKMATE' : 'Not checkmate'}
 
 Rules:
 1. Provide only a single move in the format "e2e4" (from square to square).
 2. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
 3. The move must be legal according to chess rules.
-4. For beginner difficulty, you can make suboptimal but reasonable moves.
-5. For master difficulty, provide the strongest move you can find.
+4. ${isCheck ? 'IMPORTANT: The king is in check! You MUST address the check with your move.' : ''}
+5. For beginner difficulty, you can make suboptimal but reasonable moves.
+6. For master difficulty, provide the strongest move you can find.
 
 Respond with ONLY the move in the format described, nothing else.
+
+${isCheck ? 'CRITICAL: Your king is in check! You MUST make a move that addresses the check. This can be done by: 1) Moving the king, 2) Capturing the checking piece, or 3) Blocking the check.' : ''}
 `;
 
   const request: GeminiRequest = {

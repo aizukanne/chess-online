@@ -18,6 +18,11 @@ const GameHistory: React.FC<GameHistoryProps> = ({ maxHeight = 400 }) => {
   const { history } = useAppSelector(state => state.game);
   const historyEndRef = React.useRef<HTMLDivElement>(null);
   
+  // Debug: Log the history array
+  React.useEffect(() => {
+    console.log('GameHistory - Current history array:', history);
+  }, [history]);
+  
   // Auto-scroll to the bottom when history updates
   React.useEffect(() => {
     if (historyEndRef.current) {
@@ -27,16 +32,25 @@ const GameHistory: React.FC<GameHistoryProps> = ({ maxHeight = 400 }) => {
 
   // Format the move history into pairs (white move, black move)
   const formatHistory = () => {
+    console.log('formatHistory - Input history array:', history);
+    
     const formattedHistory = [];
     
     for (let i = 0; i < history.length; i += 2) {
+      const moveNumber = Math.floor(i / 2) + 1;
+      const whiteMove = history[i];
+      const blackMove = i + 1 < history.length ? history[i + 1] : undefined;
+      
+      console.log(`formatHistory - Move ${moveNumber}: White: ${whiteMove}, Black: ${blackMove || 'none'}`);
+      
       formattedHistory.push({
-        moveNumber: Math.floor(i / 2) + 1,
-        whiteMove: history[i],
-        blackMove: i + 1 < history.length ? history[i + 1] : undefined
+        moveNumber,
+        whiteMove,
+        blackMove
       });
     }
     
+    console.log('formatHistory - Formatted history:', formattedHistory);
     return formattedHistory;
   };
 
