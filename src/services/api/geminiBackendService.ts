@@ -136,6 +136,16 @@ As a grandmaster, you have:
 - Knowledge of recent theoretical developments from 2020-2024 top-level tournament play
 - Ability to analyze psychological aspects of choosing specific variations
 
+Algorithm to use:
+Use the Minimax algorithm with Alpha-Beta pruning to evaluate positions. For each position:
+1. Evaluate material balance using standard piece values (pawn=100, knight=320, bishop=330, rook=500, queen=900)
+2. Consider piece-square tables for positional evaluation (piece placement quality)
+3. Look ahead ${difficulty === 'beginner' ? '1-2' : difficulty === 'intermediate' ? '2-3' : difficulty === 'advanced' ? '3-4' : '4-5'} moves
+4. For beginner difficulty, occasionally (30-40% chance) choose a suboptimal but reasonable move
+5. For intermediate difficulty, occasionally (10-20% chance) choose a slightly suboptimal move
+6. For advanced difficulty, rarely (5-10% chance) choose a slightly suboptimal move
+7. For master difficulty, always choose the objectively strongest move
+
 Rules:
 1. Provide only a single move in the format "e2e4" (from square to square).
 2. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
@@ -217,6 +227,19 @@ As a grandmaster, you have:
 - Expertise in pattern recognition and positional evaluation
 - Knowledge of recent theoretical developments from 2020-2024 top-level tournament play
 - Ability to analyze psychological aspects of choosing specific variations
+
+Algorithm to use:
+Use the Minimax algorithm with Alpha-Beta pruning to evaluate positions. For each position:
+1. Evaluate material balance using standard piece values (pawn=100, knight=320, bishop=330, rook=500, queen=900)
+2. Consider piece-square tables for positional evaluation (piece placement quality)
+3. Look ahead ${difficulty === 'beginner' ? '1-2' : difficulty === 'intermediate' ? '2-3' : difficulty === 'advanced' ? '3-4' : '4-5'} moves
+4. Evaluate positions based on:
+   - Material balance
+   - Piece activity and coordination
+   - Pawn structure
+   - King safety
+   - Control of key squares and center
+   - Development and tempo
 
 Rules:
 1. Analyze the position based on the difficulty level.
@@ -340,6 +363,21 @@ As a grandmaster, you have:
 - Expertise in pattern recognition and positional evaluation
 - Knowledge of recent theoretical developments from 2020-2024 top-level tournament play
 - Ability to analyze psychological aspects of choosing specific variations
+
+Algorithm to use:
+When analyzing positions or suggesting moves, use the Minimax algorithm with Alpha-Beta pruning:
+1. Evaluate material balance using standard piece values (pawn=100, knight=320, bishop=330, rook=500, queen=900)
+2. Consider piece-square tables for positional evaluation (piece placement quality)
+3. Look ahead ${difficulty === 'beginner' ? '1-2' : difficulty === 'intermediate' ? '2-3' : difficulty === 'advanced' ? '3-4' : '4-5'} moves
+4. Evaluate positions based on:
+   - Material balance
+   - Piece activity and coordination
+   - Pawn structure
+   - King safety
+   - Control of key squares and center
+   - Development and tempo
+5. For beginner difficulty, occasionally suggest instructive moves rather than the objectively strongest ones
+6. For master difficulty, always suggest the objectively strongest moves
 
 Rules:
 1. Respond in a helpful, concise manner (1-3 sentences for beginners, more detailed for advanced players).
