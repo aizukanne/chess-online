@@ -110,28 +110,58 @@ FEN: ${fen}
 Difficulty level: ${difficulty}
 
 Rules:
-1. Provide only a single move in the format "e2e4" (from square to square).
+1. Provide only a single move in clear English and also in the format "e2e4" (from square to square).
 2. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
 3. The move must be legal according to chess rules.
 4. For beginner difficulty, you can make suboptimal but reasonable moves.
 5. For master difficulty, provide the strongest move you can find.
 
 Respond with ONLY the move in the format described, nothing else.
+For beginner difficulty, you may provide reasons for the move to help the player learn.
 `;
 
     try {
       const response = await this.makeRequest(prompt, temperature);
       
       if (response.candidates && response.candidates.length > 0) {
-        const moveText = response.candidates[0].content.parts[0].text.trim();
+        const responseText = response.candidates[0].content.parts[0].text.trim();
         
-        // Parse the move text (format: e2e4 or e7e8q)
-        if (moveText.length >= 4) {
-          const from = moveText.substring(0, 2);
-          const to = moveText.substring(2, 4);
-          const promotion = moveText.length > 4 ? moveText.substring(4, 5) : undefined;
+        // Extract the move from the response
+        // Look for patterns like "Move: e2e4" or just "e2e4"
+        const moveMatch = responseText.match(/Move:\s*([a-h][1-8][a-h][1-8][qrbnQRBN]?)/i) ||
+                          responseText.match(/([a-h][1-8][a-h][1-8][qrbnQRBN]?)/);
+        
+        if (moveMatch && moveMatch[1]) {
+          const moveText = moveMatch[1].toLowerCase();
           
-          return { from, to, promotion };
+          // Parse the move text (format: e2e4 or e7e8q)
+          if (moveText.length >= 4) {
+            const from = moveText.substring(0, 2);
+            const to = moveText.substring(2, 4);
+            const promotion = moveText.length > 4 ? moveText.substring(4, 5) : undefined;
+            
+            console.log(`Extracted move: from=${from}, to=${to}, promotion=${promotion || 'none'}`);
+            return { from, to, promotion };
+          }
+        }
+        
+        // If we couldn't extract a move using regex, fall back to the old method
+        console.log('Could not extract move using regex, falling back to direct extraction');
+        if (responseText.length >= 4) {
+          // Try to find any 4-character sequence that looks like a chess move
+          for (let i = 0; i < responseText.length - 3; i++) {
+            const potentialMove = responseText.substring(i, i + 4).toLowerCase();
+            if (/[a-h][1-8][a-h][1-8]/.test(potentialMove)) {
+              const from = potentialMove.substring(0, 2);
+              const to = potentialMove.substring(2, 4);
+              const promotion = i + 5 <= responseText.length && /[qrbnQRBN]/.test(responseText[i + 4])
+                ? responseText[i + 4].toLowerCase()
+                : undefined;
+              
+              console.log(`Found move using fallback: from=${from}, to=${to}, promotion=${promotion || 'none'}`);
+              return { from, to, promotion };
+            }
+          }
         }
       }
       
@@ -173,8 +203,10 @@ Rules:
 3. For master difficulty, provide deeper analysis with concrete variations.
 4. Mention material balance, piece activity, and potential tactics.
 5. Keep your analysis concise (2-3 sentences).
+6. Include the current FEN notation in your response.
+7. Format your response as: "Analysis: [your analysis]. Position: [FEN notation]"
 
-Respond with ONLY the analysis, nothing else.
+Respond with ONLY the analysis and FEN notation as described above.
 `;
 
     try {
@@ -223,8 +255,10 @@ Rules:
 4. Adjust your language based on the difficulty level (simpler for beginner, more technical for master).
 5. Stay in character as a chess AI assistant.
 6. If the player asks something unrelated to chess, politely redirect to the game.
+7. Include the current FEN notation in your response.
+8. Format your response as: "Response: [your message]. Position: [FEN notation]"
 
-Respond with ONLY your chat message, nothing else.
+Respond with ONLY your chat message and the FEN notation as described above.
 `;
 
     try {
