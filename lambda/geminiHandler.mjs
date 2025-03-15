@@ -4,7 +4,8 @@ import path from 'path';
 
 // Gemini API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+// Updated to use v1 instead of v1beta, but keeping the same model name
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent';
 
 // Log file configuration
 const LOG_DIR = process.env.LOG_DIR || '/tmp/chess-online-logs';
@@ -60,14 +61,9 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
     }
     
     // Prepare the request data
-    // More aggressive sanitization to ensure it doesn't contain any characters that could break JSON
+    // IMPROVED: Simplified sanitization - only remove control characters that would break JSON
     const sanitizedPrompt = prompt
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .replace(/\\(?!["\\/bfnrt])/g, '\\\\') // Escape backslashes not followed by valid escape chars
-      .replace(/"/g, '\\"') // Escape double quotes
-      .replace(/\n/g, '\\n') // Replace newlines with escaped newlines
-      .replace(/\r/g, '\\r') // Replace carriage returns with escaped carriage returns
-      .replace(/\t/g, '\\t') // Replace tabs with escaped tabs
       .replace(/[\u2028\u2029]/g, ''); // Remove line/paragraph separators
     
     const requestObject = {
@@ -88,41 +84,63 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       }
     };
     
-    // Create the JSON string that will be sent to Gemini API
-    let requestData = JSON.stringify(requestObject);
-    
-    // Validate the JSON string to ensure it's valid
+    // Let JSON.stringify handle proper escaping
+    let requestData;
     try {
-      // Try to parse the JSON string to ensure it's valid
+      requestData = JSON.stringify(requestObject);
+      
+      // Validate the JSON string to ensure it's valid
       JSON.parse(requestData);
       logMessage(`JSON VALIDATION: Valid JSON`);
     } catch (error) {
-      // If the JSON is invalid, log the error and create a simplified request
+      // If the JSON is invalid, log detailed error information
       logMessage(`JSON VALIDATION ERROR: ${error.message}`);
       console.error(`Invalid JSON detected: ${error.message}`);
       
-      // Create a simplified request with minimal content
-      const fallbackRequest = JSON.stringify({
+      // Parse the error message to extract the position where JSON parsing failed
+      const positionMatch = error.message.match(/position\s+(\d+)/i) || 
+                          error.message.match(/at\s+position\s+(\d+)/i) ||
+                          error.message.match(/\n(\d+)\n/);
+      
+      if (positionMatch && positionMatch[1]) {
+        const position = parseInt(positionMatch[1]);
+        const start = Math.max(0, position - 20);
+        const end = Math.min(JSON.stringify(requestObject).length, position + 20);
+        
+        // Show the problematic section with markers
+        const problematicSection = JSON.stringify(requestObject).substring(start, end);
+        const marker = ' '.repeat(Math.min(20, position - start)) + '^';
+        
+        logMessage(`JSON ERROR at position ${position}: ${error.message}`);
+        logMessage(`Context: ${problematicSection}`);
+        logMessage(`Position: ${marker}`);
+        
+        // Check specifically for character at the error position
+        if (position < JSON.stringify(requestObject).length) {
+          const charCode = JSON.stringify(requestObject).charCodeAt(position);
+          logMessage(`Character at position ${position}: '${JSON.stringify(requestObject)[position]}' (charCode: ${charCode})`);
+        }
+      }
+      
+      // Create a simplified fallback request
+      const fallbackRequest = {
         contents: [{ parts: [{ text: "Please provide a chess move or analysis" }] }],
         generationConfig: { temperature, maxOutputTokens: 1024 }
-      });
+      };
       
-      logMessage(`USING FALLBACK REQUEST: ${fallbackRequest}`);
-      requestData = fallbackRequest;
+      requestData = JSON.stringify(fallbackRequest);
+      logMessage(`USING FALLBACK REQUEST: ${requestData}`);
     }
     
-    // Log the exact JSON string that will be sent to Gemini API (no formatting, no truncation)
+    // Log the exact JSON string that will be sent to Gemini API
     logMessage(`EXACT REQUEST JSON: ${requestData}`);
-    
-    // Also log the raw request object for debugging
-    logMessage(`RAW REQUEST OBJECT: ${JSON.stringify(requestObject)}`);
     
     // Prepare the request options
     const options = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': requestData.length
+        'Content-Length': Buffer.byteLength(requestData)
       }
     };
     
@@ -187,6 +205,13 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       reject(error);
     });
     
+    // Set timeout for the request
+    req.setTimeout(30000, () => {
+      req.destroy();
+      logMessage('ERROR: Request timeout after 30 seconds');
+      reject(new Error('Request timeout after 30 seconds'));
+    });
+    
     req.write(requestData);
     req.end();
   });
@@ -212,6 +237,7 @@ const getCorsHeaders = (origin) => {
     'Content-Type': 'application/json; charset=utf-8'
   };
 };
+
 /**
  * Basic validation for a chess move format
  * @param {string} moveText - The move text in the format "e2e4" or "e7e8q"
@@ -305,8 +331,23 @@ export const handler = async (event, context) => {
     }
     
     try {
-      // Parse the request body
-      const body = JSON.parse(event.body);
+      // IMPROVED: Better error handling for JSON parsing of request body
+      let body;
+      try {
+        body = JSON.parse(event.body);
+      } catch (parseError) {
+        console.error(`Error parsing request body: ${parseError.message}`);
+        logMessage(`REQUEST BODY PARSE ERROR: ${parseError.message}\nBody: ${event.body}`);
+        return {
+          statusCode: 400,
+          headers: corsHeaders,
+          body: JSON.stringify({
+            error: `Invalid request body: ${parseError.message}`,
+            success: false
+          })
+        };
+      }
+      
       const { prompt, temperature, difficulty, requestType, fen, message, chatHistory } = body;
       
       // Log the exact request body without any formatting or truncation
