@@ -1,35 +1,9 @@
 import https from 'https';
-import fs from 'fs';
-import path from 'path';
 
 // Gemini API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-// Updated to use v1 instead of v1beta, but keeping the same model name
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent';
-
-// Log file configuration
-const LOG_DIR = process.env.LOG_DIR || '/tmp/chess-online-logs';
-const LOG_FILE = path.join(LOG_DIR, 'gemini-api.log');
-
-// Ensure log directory exists
-if (!fs.existsSync(LOG_DIR)) {
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-}
-
-/**
- * Log a message to the log file
- * @param {string} message - The message to log
- */
-const logMessage = (message) => {
-  const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] ${message}\n`;
-  
-  try {
-    fs.appendFileSync(LOG_FILE, logEntry);
-  } catch (error) {
-    console.error('Error writing to log file:', error);
-  }
-};
+// Using v1 endpoint with your specified model
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 // CORS configuration
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
@@ -39,43 +13,145 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 // Enable debug logging
 const DEBUG = process.env.DEBUG === 'true' || true;
 
+// System prompts for different personas
+const SYSTEM_PROMPTS = {
+  kasparov: {
+    persona: `You are Garry Kasparov, a world-class chess grandmaster with particular expertise in the Sicilian Defense Najdorf Variation.
+              As a grandmaster, you have:
+              - Deep understanding of complex interplay between tactical opportunities and long-term strategic considerations
+              - Expertise in pattern recognition and positional evaluation
+              - Knowledge of recent theoretical developments from 2020-2024 top-level tournament play
+              - Ability to analyze psychological aspects of choosing specific variations`,
+
+    algorithm: `When analyzing positions or suggesting moves, use the Minimax algorithm with Alpha-Beta pruning:
+              1. Evaluate material balance using standard piece values (pawn=100, knight=320, bishop=330, rook=500, queen=900)
+              2. Consider piece-square tables for positional evaluation (piece placement quality)
+              3. Evaluate positions based on:
+                - Material balance
+                - Piece activity and coordination
+                - Pawn structure
+                - King safety
+                - Control of key squares and center
+                - Development and tempo`,
+
+    moveRules: `Rules for suggesting moves:
+              1. Provide only a single move in the format "e2e4" (from square to square).
+              2. If it's a pawn promotion, add the promotion piece at the end, like "e7e8q" for queen promotion.
+              3. The move must be legal according to chess rules.
+              4. For beginner difficulty, make instructive moves that teach good principles rather than completely random moves.
+              5. For intermediate difficulty, play solid positional chess with occasional tactical opportunities.
+              6. For advanced difficulty, play strong tactical and strategic moves considering long-term plans.
+              7. For master difficulty, provide the strongest tournament-level move you can find, as if playing in a world championship match.`,
+
+    analysisRules: `Rules for position analysis:
+              1. Analyze the position based on the difficulty level.
+              2. For beginner difficulty, use simple language and focus on basic concepts (2-3 sentences).
+              3. For intermediate difficulty, provide a balanced analysis of material, position, and basic tactics (3-5 sentences).
+              4. For advanced difficulty, include concrete variations and deeper strategic themes (5-7 sentences).
+              5. For master difficulty, provide tournament-level analysis with precise variations, including:
+                - Detailed evaluation of the position with numerical assessments
+                - Key tactical motifs and pattern recognition
+                - Strategic themes and middlegame plans
+                - Critical pawn structures and their implications
+                - Typical piece placement and coordination
+                - Potential endgame scenarios
+              6. Use proper chess notation and provide evaluations using both traditional symbols (±, =, ∓) and numerical assessments where appropriate.
+              7. Explain the reasoning behind critical moves rather than just listing them.`,
+
+    chatRules: `Rules for chat responses:
+              1. You are ADVISING the player, not playing against them. The difficulty level refers to the player's skill level you're advising.
+              2. Respond in a helpful, concise manner (1-3 sentences for beginners, more detailed for advanced players).
+              3. If the player asks for a hint or help, provide analysis appropriate to their difficulty level.
+              4. When describing chess moves, always explain them in plain English first, followed by the notation in parentheses.
+                Example: "Moving your knight to attack the queen (Nf3)" or "Capturing the pawn with your bishop (Bxe5)"
+              5. Stay in character as Kasparov, the chess grandmaster.
+              6. If the player asks something unrelated to chess, politely redirect to the game.
+              7. When discussing concrete variations, use proper chess notation and provide evaluations.
+              8. Maintain continuity with the conversation history - refer back to previous exchanges when relevant.`
+  }
+  // Additional personas could be added here in the future
+};
+
 /**
- * Make a request to the Gemini API
- * @param {string} prompt - The prompt to send to the API
+ * Build the system instruction based on request type and difficulty
+ * @param {string} requestType - The type of request (move, analysis, chat)
+ * @param {string} difficulty - The difficulty level
+ * @returns {string} - The system instruction
+ */
+const buildSystemInstruction = (requestType, difficulty) => {
+  const systemPrompt = SYSTEM_PROMPTS.kasparov;
+  
+  // System prompt includes persona, algorithm and request-specific rules
+  let prompt = `${systemPrompt.persona}\n\n${systemPrompt.algorithm}\n\n`;
+  
+  // Add look-ahead depth based on difficulty
+  const lookAhead = difficulty === 'beginner' ? '1-2' :
+                    difficulty === 'intermediate' ? '2-3' :
+                    difficulty === 'advanced' ? '3-4' : '4-5';
+  prompt += `For this ${difficulty} level request, look ahead ${lookAhead} moves.\n\n`;
+  
+  // Add randomization instructions based on difficulty
+  if (difficulty === 'beginner') {
+    prompt += 'Occasionally (30-40% chance) choose a suboptimal but instructive move.\n\n';
+  } else if (difficulty === 'intermediate') {
+    prompt += 'Occasionally (10-20% chance) choose a slightly suboptimal move.\n\n';
+  } else if (difficulty === 'advanced') {
+    prompt += 'Rarely (5-10% chance) choose a slightly suboptimal move.\n\n';
+  } else {
+    prompt += 'Always choose the objectively strongest move.\n\n';
+  }
+  
+  // Add request-type specific rules
+  if (requestType === 'move') {
+    prompt += `${systemPrompt.moveRules}\n\n`;
+  } else if (requestType === 'analysis') {
+    prompt += `${systemPrompt.analysisRules}\n\n`;
+  } else if (requestType === 'chat') {
+    prompt += `${systemPrompt.chatRules}\n\n`;
+  }
+  
+  return prompt;
+};
+
+/**
+ * Make a request to the Gemini API with correct systemInstruction format
+ * @param {string} userPrompt - The user's prompt to send to the API
+ * @param {string} systemInstruction - The system instructions for the AI
  * @param {number} temperature - The temperature parameter for the API
  * @returns {Promise<string>} - The response from the API
  */
-const callGeminiAPI = (prompt, temperature = 0.7) => {
+const callGeminiAPI = (userPrompt, systemInstruction, temperature = 0.7) => {
   return new Promise((resolve, reject) => {
-    // Log the request (truncate long prompts for readability)
-    const truncatedPrompt = prompt.length > 500 ? prompt.substring(0, 500) + '... [truncated]' : prompt;
-    console.log(`REQUEST PROMPT (truncated):\n${truncatedPrompt}\nTemperature: ${temperature}`);
-    logMessage(`REQUEST PROMPT (truncated):\n${truncatedPrompt}\nTemperature: ${temperature}`);
-    
-    // Save full prompt to a separate log file for debugging
-    try {
-      const fullPromptLogFile = path.join(LOG_DIR, 'full-prompts.log');
-      fs.appendFileSync(fullPromptLogFile, `\n\n[${new Date().toISOString()}] FULL PROMPT:\n${prompt}\n`);
-    } catch (error) {
-      console.error('Error writing full prompt to log file:', error);
+    // Log the request information
+    console.log(`REQUEST with temperature: ${temperature}`);
+    if (DEBUG) {
+      console.log(`SYSTEM INSTRUCTION: ${systemInstruction.substring(0, 200)}...`);
+      console.log(`USER PROMPT: ${userPrompt.substring(0, 200)}...`);
     }
     
-    // Prepare the request data
-    // IMPROVED: Simplified sanitization - only remove control characters that would break JSON
-    const sanitizedPrompt = prompt
+    // Remove any control characters that could break JSON
+    const sanitizedSystemInstruction = systemInstruction
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
       .replace(/[\u2028\u2029]/g, ''); // Remove line/paragraph separators
     
+    const sanitizedUserPrompt = userPrompt
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+      .replace(/[\u2028\u2029]/g, ''); // Remove line/paragraph separators
+    
+    // Prepare the request data with correct Gemini API format
     const requestObject = {
       contents: [
         {
           parts: [
-            {
-              text: sanitizedPrompt
-            }
+            { text: sanitizedUserPrompt }
           ]
         }
       ],
+      systemInstruction: { 
+        parts: [
+          { text: sanitizedSystemInstruction }
+        ]
+      },
       generationConfig: {
         temperature,
         topP: 0.95,
@@ -91,11 +167,10 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       
       // Validate the JSON string to ensure it's valid
       JSON.parse(requestData);
-      logMessage(`JSON VALIDATION: Valid JSON`);
+      console.log(`JSON VALIDATION: Valid JSON`);
     } catch (error) {
       // If the JSON is invalid, log detailed error information
-      logMessage(`JSON VALIDATION ERROR: ${error.message}`);
-      console.error(`Invalid JSON detected: ${error.message}`);
+      console.error(`JSON VALIDATION ERROR: ${error.message}`);
       
       // Parse the error message to extract the position where JSON parsing failed
       const positionMatch = error.message.match(/position\s+(\d+)/i) || 
@@ -105,35 +180,39 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       if (positionMatch && positionMatch[1]) {
         const position = parseInt(positionMatch[1]);
         const start = Math.max(0, position - 20);
-        const end = Math.min(JSON.stringify(requestObject).length, position + 20);
+        const end = Math.min(requestData?.length || 0, position + 20);
         
         // Show the problematic section with markers
-        const problematicSection = JSON.stringify(requestObject).substring(start, end);
-        const marker = ' '.repeat(Math.min(20, position - start)) + '^';
-        
-        logMessage(`JSON ERROR at position ${position}: ${error.message}`);
-        logMessage(`Context: ${problematicSection}`);
-        logMessage(`Position: ${marker}`);
-        
-        // Check specifically for character at the error position
-        if (position < JSON.stringify(requestObject).length) {
-          const charCode = JSON.stringify(requestObject).charCodeAt(position);
-          logMessage(`Character at position ${position}: '${JSON.stringify(requestObject)[position]}' (charCode: ${charCode})`);
+        if (requestData) {
+          const problematicSection = requestData.substring(start, end);
+          const marker = ' '.repeat(Math.min(20, position - start)) + '^';
+          
+          console.error(`JSON ERROR at position ${position}: ${error.message}`);
+          console.error(`Context: ${problematicSection}`);
+          console.error(`Position: ${marker}`);
         }
       }
       
       // Create a simplified fallback request
       const fallbackRequest = {
-        contents: [{ parts: [{ text: "Please provide a chess move or analysis" }] }],
+        contents: [
+          {
+            parts: [{ text: "Please provide a chess move or analysis." }]
+          }
+        ],
+        systemInstruction: {
+          parts: [{ text: "You are a chess assistant." }]
+        },
         generationConfig: { temperature, maxOutputTokens: 1024 }
       };
       
       requestData = JSON.stringify(fallbackRequest);
-      logMessage(`USING FALLBACK REQUEST: ${requestData}`);
+      console.log(`USING FALLBACK REQUEST: ${requestData}`);
     }
     
-    // Log the exact JSON string that will be sent to Gemini API
-    logMessage(`EXACT REQUEST JSON: ${requestData}`);
+    if (DEBUG) {
+      console.log(`EXACT REQUEST JSON: ${requestData.substring(0, 500)}...`);
+    }
     
     // Prepare the request options
     const options = {
@@ -153,20 +232,8 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
       });
       
       res.on('end', () => {
-        // Log the complete response without truncation
+        // Log the response status
         console.log(`Response status: ${res.statusCode}`);
-        console.log(`COMPLETE RESPONSE DATA: ${responseData}`);
-        
-        // Log the exact response to the log file
-        logMessage(`EXACT RESPONSE:\nStatus: ${res.statusCode}\nData: ${responseData}`);
-        
-        // Save raw response to a separate log file for debugging
-        try {
-          const rawResponseLogFile = path.join(LOG_DIR, 'raw-responses.log');
-          fs.appendFileSync(rawResponseLogFile, `\n\n[${new Date().toISOString()}] RAW RESPONSE:\nStatus: ${res.statusCode}\n${responseData}\n`);
-        } catch (error) {
-          console.error('Error writing raw response to log file:', error);
-        }
         
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try {
@@ -175,15 +242,15 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
               const text = parsedResponse.candidates[0].content.parts[0].text;
               resolve(text);
             } else {
-              logMessage(`ERROR: No candidates in response: ${responseData}`);
+              console.error(`ERROR: No candidates in response: ${responseData}`);
               reject(new Error('No candidates in response'));
             }
           } catch (error) {
-            logMessage(`ERROR: JSON parsing error: ${error.message}\nResponse: ${responseData}`);
+            console.error(`ERROR: JSON parsing error: ${error.message}\nResponse: ${responseData}`);
             reject(error);
           }
         } else {
-          logMessage(`ERROR: API request failed with status ${res.statusCode}: ${responseData}`);
+          console.error(`ERROR: API request failed with status ${res.statusCode}: ${responseData}`);
           reject(new Error(`API request failed with status ${res.statusCode}: ${responseData}`));
         }
       });
@@ -192,23 +259,14 @@ const callGeminiAPI = (prompt, temperature = 0.7) => {
     req.on('error', (error) => {
       // Log detailed error information
       console.error('Request error:', error);
-      logMessage(`ERROR DETAILS:\nMessage: ${error.message}\nStack: ${error.stack}\nCode: ${error.code || 'N/A'}`);
-      
-      // Save error to a separate log file for debugging
-      try {
-        const errorLogFile = path.join(LOG_DIR, 'error.log');
-        fs.appendFileSync(errorLogFile, `\n\n[${new Date().toISOString()}] REQUEST ERROR:\n${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}\n`);
-      } catch (logError) {
-        console.error('Error writing to error log file:', logError);
-      }
-      
+      console.error(`ERROR DETAILS: Message: ${error.message}, Code: ${error.code || 'N/A'}`);
       reject(error);
     });
     
     // Set timeout for the request
     req.setTimeout(30000, () => {
       req.destroy();
-      logMessage('ERROR: Request timeout after 30 seconds');
+      console.error('ERROR: Request timeout after 30 seconds');
       reject(new Error('Request timeout after 30 seconds'));
     });
     
@@ -331,13 +389,12 @@ export const handler = async (event, context) => {
     }
     
     try {
-      // IMPROVED: Better error handling for JSON parsing of request body
+      // Parse the request body
       let body;
       try {
         body = JSON.parse(event.body);
       } catch (parseError) {
         console.error(`Error parsing request body: ${parseError.message}`);
-        logMessage(`REQUEST BODY PARSE ERROR: ${parseError.message}\nBody: ${event.body}`);
         return {
           statusCode: 400,
           headers: corsHeaders,
@@ -348,21 +405,18 @@ export const handler = async (event, context) => {
         };
       }
       
-      const { prompt, temperature, difficulty, requestType, fen, message, chatHistory } = body;
+      const { prompt: userPrompt, temperature, difficulty, requestType, fen, message, chatHistory } = body;
       
-      // Log the exact request body without any formatting or truncation
-      console.log(`EXACT REQUEST BODY: ${event.body}`);
-      logMessage(`EXACT REQUEST BODY: ${event.body}`);
+      if (DEBUG) {
+        console.log(`EXACT REQUEST BODY: ${event.body}`);
+        console.log(`REQUEST TYPE: ${requestType}, DIFFICULTY: ${difficulty}`);
+      }
       
-      // Log the parsed body as raw JSON string
-      const rawBodyString = JSON.stringify(body);
-      logMessage(`RAW PARSED BODY: ${rawBodyString}`);
+      // Build the system instruction with persona details, algorithms, and rules
+      const systemInstruction = buildSystemInstruction(requestType, difficulty);
       
-      // Log basic request details to console
-      console.log(`REQUEST TYPE: ${requestType}, DIFFICULTY: ${difficulty}`);
-      
-      // Call the Gemini API
-      const response = await callGeminiAPI(prompt, temperature);
+      // Call the Gemini API with proper system instruction format
+      const response = await callGeminiAPI(userPrompt, systemInstruction, temperature);
       
       // For move requests, validate the move format before returning
       if (requestType === 'move') {
@@ -374,9 +428,9 @@ export const handler = async (event, context) => {
         if (!isValidFormat) {
           console.log(`Invalid move format returned by Gemini: ${moveText}`);
           
-          // Try to get a valid move by retrying with a more explicit prompt
-          const retryPrompt = `
-${prompt}
+          // Add retry instructions to the user prompt
+          const retryUserPrompt = `
+${userPrompt}
 
 CRITICAL: Your previous move "${moveText}" was invalid. Please provide a move in the correct format.
 The format should be exactly like "e2e4" (from square to square).
@@ -386,7 +440,7 @@ Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
 `;
           
           console.log('Retrying with more explicit prompt');
-          const retryResponse = await callGeminiAPI(retryPrompt, temperature);
+          const retryResponse = await callGeminiAPI(retryUserPrompt, systemInstruction, temperature);
           const retryMoveText = retryResponse.trim();
           
           const retryIsValidFormat = validateMoveFormat(retryMoveText);
@@ -433,15 +487,6 @@ Respond with ONLY a valid move in the format "e2e4" or "e7e8q" for promotion.
     } catch (error) {
       // Log detailed error information
       console.error('Lambda handler error:', error);
-      logMessage(`LAMBDA ERROR DETAILS:\nMessage: ${error.message}\nStack: ${error.stack}\nCode: ${error.code || 'N/A'}`);
-      
-      // Save error to a separate log file for debugging
-      try {
-        const errorLogFile = path.join(LOG_DIR, 'lambda-errors.log');
-        fs.appendFileSync(errorLogFile, `\n\n[${new Date().toISOString()}] LAMBDA ERROR:\n${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}\n`);
-      } catch (logError) {
-        console.error('Error writing to lambda error log file:', logError);
-      }
       
       // Return the error with detailed information
       return {
