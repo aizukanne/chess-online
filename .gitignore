@@ -19,6 +19,9 @@
 .env.test.local
 .env.production.local
 
+# Implementation plans
+gemini-system-prompt-implementation.md
+
 # logs
 /logs
 *.log
